@@ -13,7 +13,7 @@ interface Token {
 }
 
 export default function Home() {
-  const [code, setCode] = useState('// Write your mini-language code here\nint main() {\n    int a = 10;\n    int b = 20;\n    int c = a + b;\n    return c;\n}\n');
+  const [code, setCode] = useState('ranger MyProgram {\n    int a = 10;\n    int b = 20;\n    int c = a + b;\n    print(c);\n}\n');
   const [activeTab, setActiveTab] = useState<TabType>('lexer');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<Record<string, any>>({});
@@ -43,7 +43,7 @@ export default function Home() {
         headers: { 'Content-Type': 'text/plain' },
         body: code,
       });
-      if (parserRes.ok) newResults.parser = await parserRes.text();
+      newResults.parser = await parserRes.text();
 
       // 3. Semantic
       const semanticRes = await fetch(`${API_BASE_URL}/phase3/semantic`, {
@@ -51,7 +51,7 @@ export default function Home() {
         headers: { 'Content-Type': 'text/plain' },
         body: code,
       });
-      if (semanticRes.ok) newResults.semantic = await semanticRes.text();
+      newResults.semantic = await semanticRes.text();
 
       // 4. TAC
       const tacRes = await fetch(`${API_BASE_URL}/phase4/tac`, {
@@ -59,7 +59,7 @@ export default function Home() {
         headers: { 'Content-Type': 'text/plain' },
         body: code,
       });
-      if (tacRes.ok) newResults.tac = await tacRes.text();
+      newResults.tac = await tacRes.text();
 
       // 5. Quadruple
       const quadRes = await fetch(`${API_BASE_URL}/phase4/quadruple`, {
@@ -67,7 +67,7 @@ export default function Home() {
         headers: { 'Content-Type': 'text/plain' },
         body: code,
       });
-      if (quadRes.ok) newResults.quadruple = await quadRes.text();
+      newResults.quadruple = await quadRes.text();
 
       // 6. Target Code
       const targetRes = await fetch(`${API_BASE_URL}/phase6/target`, {
@@ -75,7 +75,7 @@ export default function Home() {
         headers: { 'Content-Type': 'text/plain' },
         body: code,
       });
-      if (targetRes.ok) newResults.target = await targetRes.text();
+      newResults.target = await targetRes.text();
 
       // Full Compile
       const fullRes = await fetch(`${API_BASE_URL}/compile/full`, {
@@ -83,7 +83,11 @@ export default function Home() {
         headers: { 'Content-Type': 'text/plain' },
         body: code,
       });
-      if (fullRes.ok) newResults.full = await fullRes.json();
+      if (fullRes.ok) {
+        newResults.full = await fullRes.json();
+      } else {
+        newResults.full = await fullRes.text();
+      }
 
     } catch (err: any) {
       setError(err.message || "An error occurred during compilation.");
