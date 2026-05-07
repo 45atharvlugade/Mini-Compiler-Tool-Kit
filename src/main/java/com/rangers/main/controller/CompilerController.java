@@ -27,8 +27,11 @@ import com.rangers.main.model.Token;
 import com.rangers.main.parser.Parser;
 import com.rangers.main.service.CompilerService;
 
+import org.springframework.web.bind.annotation.CrossOrigin;
+
 @RestController
 @RequestMapping("/compiler")
+@CrossOrigin(origins = "*")
 public class CompilerController {
 
     @Autowired
