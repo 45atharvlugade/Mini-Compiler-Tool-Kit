@@ -24,82 +24,212 @@ export default function Home() {
     setError(null);
     const newResults: Record<string, any> = {};
 
+    const fetchPhase = async (path: string, key: string, isJson: boolean = false) => {
+      try {
+        const res = await fetch(`${API_BASE_URL}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: code,
+        });
+        
+        if (isJson) {
+          if (res.ok) newResults[key] = await res.json();
+          else newResults[key] = await res.text(); // Capture error text
+        } else {
+          newResults[key] = await res.text();
+        }
+      } catch (e: any) {
+        newResults[key] = e.message || "Network Error";
+      }
+    };
+
+    await Promise.all([
+      fetchPhase('/phase1/lexer', 'lexer', true),
+      fetchPhase('/phase2/parser', 'parser', false),
+      fetchPhase('/phase3/semantic', 'semantic', false),
+      fetchPhase('/phase4/tac', 'tac', false),
+      fetchPhase('/phase4/quadruple', 'quadruple', false),
+      fetchPhase('/phase6/target', 'target', false),
+      fetchPhase('/compile/full', 'full', true)
+    ]);
+
+    setResults(newResults);
+    setIsLoading(false);
+  };
+
+  const isErrorText = (text: any) => {
+    if (typeof text !== 'string') return false;
+    return text.includes('"status":500') || text.includes('Exception') || text.includes('Error:');
+  };
+
+  const renderError = (data: string) => {
     try {
-      // 1. Lexer
-      const lexerRes = await fetch(`${API_BASE_URL}/phase1/lexer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      if (lexerRes.ok) {
-        newResults.lexer = await lexerRes.json();
-      } else {
-        throw new Error(await lexerRes.text());
-      }
-
-      // 2. Parser
-      const parserRes = await fetch(`${API_BASE_URL}/phase2/parser`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      newResults.parser = await parserRes.text();
-
-      // 3. Semantic
-      const semanticRes = await fetch(`${API_BASE_URL}/phase3/semantic`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      newResults.semantic = await semanticRes.text();
-
-      // 4. TAC
-      const tacRes = await fetch(`${API_BASE_URL}/phase4/tac`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      newResults.tac = await tacRes.text();
-
-      // 5. Quadruple
-      const quadRes = await fetch(`${API_BASE_URL}/phase4/quadruple`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      newResults.quadruple = await quadRes.text();
-
-      // 6. Target Code
-      const targetRes = await fetch(`${API_BASE_URL}/phase6/target`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      newResults.target = await targetRes.text();
-
-      // Full Compile
-      const fullRes = await fetch(`${API_BASE_URL}/compile/full`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: code,
-      });
-      if (fullRes.ok) {
-        newResults.full = await fullRes.json();
-      } else {
-        newResults.full = await fullRes.text();
-      }
-
-    } catch (err: any) {
-      setError(err.message || "An error occurred during compilation.");
-    } finally {
-      setResults(newResults);
-      setIsLoading(false);
+      const parsed = JSON.parse(data);
+      return (
+        <div className="error-state">
+          <strong>{parsed.error || 'Error'} ({parsed.status})</strong>
+          <p style={{ marginTop: '0.5rem' }}>{parsed.message}</p>
+          {parsed.trace && (
+            <details style={{ marginTop: '1rem', cursor: 'pointer' }}>
+              <summary>View Stack Trace</summary>
+              <pre style={{ marginTop: '0.5rem', fontSize: '0.8rem', opacity: 0.8 }}>{parsed.trace}</pre>
+            </details>
+          )}
+        </div>
+      );
+    } catch {
+      return <div className="error-state">{data}</div>;
     }
+  };
+
+  // Structured Formatters
+  const renderSemantic = (data: string) => {
+    let errors: string[] = [];
+    let symbolTable: string[] = [];
+    let typeTable: string[] = [];
+    let expressions: string[] = [];
+
+    let currentSection = '';
+
+    data.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('ERRORS:')) currentSection = 'ERRORS';
+      else if (trimmed.startsWith('SYMBOL TABLE:')) currentSection = 'SYMBOL TABLE';
+      else if (trimmed.startsWith('TYPE TABLE:')) currentSection = 'TYPE TABLE';
+      else if (trimmed.startsWith('EXPRESSION TABLE:')) currentSection = 'EXPRESSION TABLE';
+      else if (trimmed && !trimmed.startsWith('=====') && currentSection) {
+        if (currentSection === 'ERRORS') errors.push(trimmed);
+        if (currentSection === 'SYMBOL TABLE') symbolTable.push(trimmed);
+        if (currentSection === 'TYPE TABLE') typeTable.push(trimmed);
+        if (currentSection === 'EXPRESSION TABLE') expressions.push(trimmed);
+      }
+    });
+
+    return (
+      <div className="semantic-grid animated">
+        <div className="report-card">
+          <h4>Errors</h4>
+          {errors.length === 1 && errors[0].includes('No') ? (
+            <div style={{color: 'var(--success)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>{errors[0]}</div>
+          ) : (
+            <ul style={{color: 'var(--error)', paddingLeft: '1rem', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>
+              {errors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          )}
+        </div>
+        <div className="report-card">
+          <h4>Symbol Table</h4>
+          {symbolTable.length === 0 || (symbolTable.length === 1 && symbolTable[0] === '{}') ? (
+            <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div>
+          ) : (
+            <div className="raw-output" style={{ color: '#fcd34d' }}>{symbolTable.join('\n')}</div>
+          )}
+        </div>
+        <div className="report-card">
+          <h4>Type Table</h4>
+          {typeTable.length === 0 || (typeTable.length === 1 && typeTable[0] === 'Empty') ? (
+            <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div>
+          ) : (
+            <div className="raw-output" style={{ color: '#38bdf8' }}>{typeTable.join('\n')}</div>
+          )}
+        </div>
+        <div className="report-card">
+          <h4>Expression Table</h4>
+          {expressions.length === 0 || (expressions.length === 1 && expressions[0] === 'Empty') ? (
+            <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div>
+          ) : (
+            <div className="raw-output" style={{ color: '#a78bfa' }}>{expressions.join('\n')}</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAST = (data: string) => {
+    const lines = data.split('\n').filter(l => l.trim() !== '');
+    return (
+      <div className="code-block animated">
+        {lines.map((line, idx) => {
+          const match = line.match(/^(\s*)(.*)$/);
+          if (!match) return null;
+          const [, spaces, content] = match;
+          const indentLevel = spaces.length / 2;
+          
+          const parts = content.split(':');
+          const nodeName = parts[0];
+          const nodeValue = parts.slice(1).join(':').trim();
+
+          return (
+            <div key={idx} className="ast-line" style={{ paddingLeft: `${indentLevel * 20}px` }}>
+              {indentLevel > 0 && <span className="ast-indent"></span>}
+              <span className="ast-node-name">{nodeName}</span>
+              {nodeValue && <span className="ast-node-value">: {nodeValue}</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderTAC = (data: string) => {
+    const lines = data.split('\n').filter(l => l.trim() !== '' && !l.includes('====='));
+    return (
+      <div className="code-block animated">
+        {lines.map((line, idx) => {
+          // simple syntax highlight
+          const highlighted = line
+            .replace(/(=|\+|-|\*|\/|<|>|==|!=|<=|>=)/g, '<span class="code-operator">$1</span>')
+            .replace(/\b(t\d+)\b/g, '<span class="code-temp">$1</span>');
+
+          return (
+            <div key={idx} className="code-line" dangerouslySetInnerHTML={{ __html: highlighted }} />
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderQuadruples = (data: string) => {
+    const lines = data.split('\n').filter(l => l.trim() !== '' && !l.includes('====='));
+    const rows = lines.map(line => {
+      const match = line.match(/^\s*\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)\s*$/);
+      if (match) {
+        return { op: match[1], arg1: match[2], arg2: match[3], res: match[4] };
+      }
+      return null;
+    }).filter(Boolean);
+
+    if (rows.length === 0) return <pre className="raw-output">{data}</pre>;
+
+    return (
+      <div className="animated">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Operator</th>
+              <th>Argument 1</th>
+              <th>Argument 2</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr key={idx}>
+                <td className="code-operator">{row?.op}</td>
+                <td className="code-operand">{row?.arg1}</td>
+                <td className="code-operand">{row?.arg2}</td>
+                <td className="code-temp">{row?.res}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   const renderOutput = () => {
     if (error) {
-      return <div className="output-content" style={{ color: 'var(--error)' }}>{error}</div>;
+      return <div className="output-content">{renderError(error)}</div>;
     }
 
     const data = results[activeTab];
@@ -124,10 +254,14 @@ export default function Home() {
       );
     }
 
+    if (isErrorText(data)) {
+      return <div className="output-content">{renderError(data)}</div>;
+    }
+
     if (activeTab === 'lexer' && Array.isArray(data)) {
       return (
         <div className="output-content" style={{ padding: 0 }}>
-          <table className="token-table">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Type</th>
@@ -137,10 +271,10 @@ export default function Home() {
             </thead>
             <tbody>
               {data.map((token: Token, idx: number) => (
-                <tr key={idx} className="animated" style={{ animationDelay: `${idx * 0.02}s` }}>
-                  <td className="token-type">{token.type}</td>
-                  <td className="token-value">{token.value}</td>
-                  <td>{token.line}</td>
+                <tr key={idx} className="animated" style={{ animationDelay: `${idx * 0.01}s` }}>
+                  <td style={{ color: '#34d399', fontWeight: 600 }}>{token.type}</td>
+                  <td style={{ color: '#fcd34d' }}>{token.value}</td>
+                  <td style={{ color: '#94a3b8' }}>{token.line}</td>
                 </tr>
               ))}
             </tbody>
@@ -149,17 +283,100 @@ export default function Home() {
       );
     }
 
-    if (activeTab === 'full' && typeof data === 'object') {
+    if (activeTab === 'parser' && typeof data === 'string') {
+      return <div className="output-content">{renderAST(data)}</div>;
+    }
+
+    if (activeTab === 'semantic' && typeof data === 'string') {
+      return <div className="output-content">{renderSemantic(data)}</div>;
+    }
+
+    if (activeTab === 'tac' && typeof data === 'string') {
+      return <div className="output-content">{renderTAC(data)}</div>;
+    }
+
+    if (activeTab === 'quadruple' && typeof data === 'string') {
+      return <div className="output-content" style={{ padding: 0 }}>{renderQuadruples(data)}</div>;
+    }
+
+    if (activeTab === 'target' && typeof data === 'string') {
       return (
         <div className="output-content">
-          {JSON.stringify(data, null, 2)}
+          <div className="code-block animated">
+            {data.split('\n').filter(l => l.trim() !== '' && !l.includes('=====')).map((line, idx) => (
+              <div key={idx} className="code-line">{line}</div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'full' && typeof data === 'object') {
+      return (
+        <div className="output-content animated">
+          <div className="report-card" style={{ gridColumn: '1 / -1' }}>
+            <h3>Semantic Analysis</h3>
+            {renderSemantic(data.semantic || '')}
+          </div>
+          <div className="report-card">
+            <h3>Three Address Code (TAC)</h3>
+            {renderTAC(data.tac || '')}
+          </div>
+          <div className="report-card">
+            <h3>Quadruples</h3>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Operator</th>
+                  <th>Arg 1</th>
+                  <th>Arg 2</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.quadruples || []).map((q: any, idx: number) => (
+                  <tr key={idx}>
+                    <td className="code-operator">{q.operator}</td>
+                    <td className="code-operand">{q.arg1}</td>
+                    <td className="code-operand">{q.arg2}</td>
+                    <td className="code-temp">{q.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="report-card">
+            <h3>Optimized Quadruples</h3>
+             <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Operator</th>
+                  <th>Arg 1</th>
+                  <th>Arg 2</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.optimized || []).map((q: any, idx: number) => (
+                  <tr key={idx}>
+                    <td className="code-operator">{q.operator}</td>
+                    <td className="code-operand">{q.arg1}</td>
+                    <td className="code-operand">{q.arg2}</td>
+                    <td className="code-temp">{q.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       );
     }
 
     return (
       <div className="output-content animated">
-        {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
+        <pre className="raw-output">
+          {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
+        </pre>
       </div>
     );
   };
@@ -178,7 +395,6 @@ export default function Home() {
     <div className="app-container">
       <header className="header">
         <div className="logo">
-          <div className="logo-icon">MC</div>
           <div className="logo-text">Mini-Compiler Tool Kit</div>
         </div>
         <button className="btn btn-primary" onClick={runCompiler} disabled={isLoading}>
