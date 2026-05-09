@@ -32,9 +32,7 @@ public class SemanticAnalyzer {
     // ===== MAIN METHOD =====
     public String analyze(ASTNode root) {
 
-        // =========================================
-        // RESET EVERYTHING
-        // =========================================
+        // 🔥 RESET EVERYTHING (MANDATORY)
         expressions.clear();
         typeTable.clear();
 
@@ -49,7 +47,7 @@ public class SemanticAnalyzer {
         errorTable.clear();
         errorCount = 0;
 
-        // optional fresh symbol table
+        // 🔥 optional (only if you want fresh symbol table every time)
         symbolTable.getTable().clear();
 
         // =========================================
@@ -258,18 +256,24 @@ public class SemanticAnalyzer {
 
                 break;
 
-            // =========================================
-            // DECLARATION
-            // =========================================
+            // 🔥 HANDLE IF PROPERLY
+            case "IF":
+                handleIf(node);
+                return;
+
+            // 🔥 HANDLE WHILE PROPERLY
+            case "WHILE":
+                handleWhile(node);
+                return;
+
+            // 🔥 DECLARATION
             case "DECLARATION":
 
                 handleDeclaration(node);
 
                 break;
 
-            // =========================================
-            // ASSIGNMENT
-            // =========================================
+            // 🔥 ASSIGNMENT (post-order)
             case "ASSIGN":
 
                 // Visit RHS first
@@ -299,9 +303,7 @@ public class SemanticAnalyzer {
 
                 break;
 
-            // =========================================
-            // IDENTIFIER
-            // =========================================
+            // 🔥 IDENTIFIER
             case "IDENTIFIER":
 
                 checkVariable(node.getValue());
@@ -363,19 +365,8 @@ public class SemanticAnalyzer {
                     .get(0)
                     .getValue();
 
-        // =========================================
-        // DUPLICATE DECLARATION CHECK
-        // =========================================
-        if (symbolTable.isDeclared(varName)) {
-
-            addError(
-                    "Variable '" +
-                    varName +
-                    "' already declared"
-            );
-
-            return;
-        }
+        // 🔥 prevent duplicate declaration processing
+        if (symbolTable.isDeclared(varName)) return;
 
         // =========================================
         // ADD TO SYMBOL TABLE
@@ -391,9 +382,7 @@ public class SemanticAnalyzer {
                 dataType
         );
 
-        // =========================================
-        // HANDLE INITIAL VALUE
-        // =========================================
+        // 🔥 HANDLE INITIAL VALUE (VERY IMPORTANT)
         if (node.getChildren().size() > 1) {
 
             ASTNode exprNode = node.getChildren().get(1);
@@ -428,23 +417,10 @@ public class SemanticAnalyzer {
                     " = " +
                     expr;
 
-            // =====================================
-            // STORE EXPRESSION
-            // =====================================
-            if (!expressionSet.contains(fullExpression)) {
-
-                expressions.add(fullExpression);
-
-                expressionSet.add(fullExpression);
-            }
-
-            // =====================================
-            // STORE CONSTANTS
-            // =====================================
-            if (exprNode.getType().equals("NUMBER") ||
-                exprNode.getType().equals("STRING")) {
-
-                constantTable.add(exprNode.getValue());
+            // 🔥 avoid duplicates
+            if (!expressionSet.contains(fullExpr)) {
+                expressions.add(fullExpr);
+                expressionSet.add(fullExpr);
             }
         }
     }
@@ -524,23 +500,11 @@ public class SemanticAnalyzer {
                 " = " +
                 expr;
 
-        // =========================================
-        // STORE EXPRESSION
-        // =========================================
-        if (!expressionSet.contains(fullExpression)) {
-
-            expressions.add(fullExpression);
-
-            expressionSet.add(fullExpression);
-        }
-
-        // =========================================
-        // STORE CONSTANTS
-        // =========================================
-        if (exprNode.getType().equals("NUMBER") ||
-            exprNode.getType().equals("STRING")) {
-
-            constantTable.add(exprNode.getValue());
+            // 🔥 prevent duplicates
+            if (!expressionSet.contains(fullExpr)) {
+                expressions.add(fullExpr);
+                expressionSet.add(fullExpr);
+            }
         }
     }
 

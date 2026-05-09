@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 
 const API_BASE_URL = 'http://localhost:8080/compiler';
 
-type TabType = 'lexer' | 'parser' | 'semantic' | 'tac' | 'quadruple' | 'target' | 'full';
+type TabType = 'lexer' | 'parser' | 'semantic' | 'tac' | 'quadruple' | 'target' | 'full' | 'execution';
 
 interface Token {
   type: string;
@@ -50,7 +50,8 @@ export default function Home() {
       fetchPhase('/phase4/tac', 'tac', false),
       fetchPhase('/phase4/quadruple', 'quadruple', false),
       fetchPhase('/phase6/target', 'target', false),
-      fetchPhase('/compile/full', 'full', true)
+      fetchPhase('/compile/full', 'full', true),
+      fetchPhase('/compile-file', 'execution', false)
     ]);
 
     setResults(newResults);
@@ -177,8 +178,9 @@ export default function Home() {
       <div className="code-block animated">
         {lines.map((line, idx) => {
           // simple syntax highlight
-          const highlighted = line
-            .replace(/(=|\+|-|\*|\/|<|>|==|!=|<=|>=)/g, '<span class="code-operator">$1</span>')
+          const safeLine = line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const highlighted = safeLine
+            .replace(/(=|\+|-|\*|\/|&lt;|&gt;|==|!=|&lt;=|&gt;=)/g, '<span class="code-operator">$1</span>')
             .replace(/\b(t\d+)\b/g, '<span class="code-temp">$1</span>');
 
           return (
@@ -311,6 +313,14 @@ export default function Home() {
       );
     }
 
+    if (activeTab === 'execution' && typeof data === 'string') {
+      return (
+        <div className="output-content animated">
+          <pre className="raw-output" style={{ color: '#fcd34d' }}>{data}</pre>
+        </div>
+      );
+    }
+
     if (activeTab === 'full' && typeof data === 'object') {
       return (
         <div className="output-content animated">
@@ -336,7 +346,7 @@ export default function Home() {
               <tbody>
                 {(data.quadruples || []).map((q: any, idx: number) => (
                   <tr key={idx}>
-                    <td className="code-operator">{q.operator}</td>
+                    <td className="code-operator">{q.op}</td>
                     <td className="code-operand">{q.arg1}</td>
                     <td className="code-operand">{q.arg2}</td>
                     <td className="code-temp">{q.result}</td>
@@ -359,7 +369,7 @@ export default function Home() {
               <tbody>
                 {(data.optimized || []).map((q: any, idx: number) => (
                   <tr key={idx}>
-                    <td className="code-operator">{q.operator}</td>
+                    <td className="code-operator">{q.op}</td>
                     <td className="code-operand">{q.arg1}</td>
                     <td className="code-operand">{q.arg2}</td>
                     <td className="code-temp">{q.result}</td>
@@ -388,6 +398,7 @@ export default function Home() {
     { id: 'tac', label: 'TAC' },
     { id: 'quadruple', label: 'Quadruple' },
     { id: 'target', label: 'Target Code' },
+    { id: 'execution', label: 'Execution Trace' },
     { id: 'full', label: 'Full Report' },
   ];
 
