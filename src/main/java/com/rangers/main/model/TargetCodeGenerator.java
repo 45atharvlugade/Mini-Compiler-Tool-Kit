@@ -8,80 +8,291 @@ import org.springframework.stereotype.Component;
 @Component
 public class TargetCodeGenerator {
 
+    // =========================================
+    // REGISTER COUNTER
+    // =========================================
     private int registerCount = 0;
 
+    // =========================================
+    // GENERATE NEW REGISTER
+    // =========================================
     private String newRegister() {
+
         return "R" + (++registerCount);
     }
 
-    private String clean(String s) {
-        if (s == null) return "";
-        return s.replace("\n", "")
+    // =========================================
+    // CLEAN STRING
+    // =========================================
+    private String clean(String value) {
+
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\n", "")
                 .replace("\r", "")
                 .replace(",", "")
                 .trim();
     }
 
+    // =========================================
+    // MAIN TARGET CODE GENERATOR
+    // =========================================
     public List<String> generate(List<TAC> tacList) {
 
         registerCount = 0;
 
-        List<String> code = new ArrayList<>();
+        List<String> targetCode =
+                new ArrayList<>();
 
-        for (TAC t : tacList) {
+        // =====================================
+        // PROCESS EACH TAC
+        // =====================================
+        for (TAC tac : tacList) {
 
-            String op = clean(t.getOp());
-            String arg1 = clean(t.getArg1());
-            String arg2 = clean(t.getArg2());
-            String result = clean(t.getResult());
+            String op =
+                    clean(tac.getOp());
 
-            // ================= ASSIGN =================
+            String arg1 =
+                    clean(tac.getArg1());
+
+            String arg2 =
+                    clean(tac.getArg2());
+
+            String result =
+                    clean(tac.getResult());
+
+            // =================================
+            // ASSIGNMENT
+            // a = b
+            // =================================
             if ("=".equals(op)) {
-                code.add("MOV " + result + ", " + arg1);
+
+                targetCode.add(
+                        "MOV " +
+                        result +
+                        ", " +
+                        arg1
+                );
             }
 
-            // ================= ARITHMETIC =================
-            else if ("+".equals(op) || "-".equals(op) ||
-                     "*".equals(op) || "/".equals(op)) {
+            // =================================
+            // ADDITION
+            // t1 = a + b
+            // =================================
+            else if ("+".equals(op)) {
 
-                String r = newRegister();
-
-                code.add("MOV " + r + ", " + arg1);
-
-                switch (op) {
-                    case "+" -> code.add("ADD " + r + ", " + arg2);
-                    case "-" -> code.add("SUB " + r + ", " + arg2);
-                    case "*" -> code.add("MUL " + r + ", " + arg2);
-                    case "/" -> code.add("DIV " + r + ", " + arg2);
-                }
-
-                code.add("MOV " + result + ", " + r);
+                handleArithmetic(
+                        targetCode,
+                        "ADD",
+                        arg1,
+                        arg2,
+                        result
+                );
             }
 
-            // ================= IF =================
+            // =================================
+            // SUBTRACTION
+            // =================================
+            else if ("-".equals(op)) {
+
+                handleArithmetic(
+                        targetCode,
+                        "SUB",
+                        arg1,
+                        arg2,
+                        result
+                );
+            }
+
+            // =================================
+            // MULTIPLICATION
+            // =================================
+            else if ("*".equals(op)) {
+
+                handleArithmetic(
+                        targetCode,
+                        "MUL",
+                        arg1,
+                        arg2,
+                        result
+                );
+            }
+
+            // =================================
+            // DIVISION
+            // =================================
+            else if ("/".equals(op)) {
+
+                handleArithmetic(
+                        targetCode,
+                        "DIV",
+                        arg1,
+                        arg2,
+                        result
+                );
+            }
+
+            // =================================
+            // RELATIONAL OPERATIONS
+            // =================================
+            else if (
+                    "<".equals(op)  ||
+                    ">".equals(op)  ||
+                    "<=".equals(op) ||
+                    ">=".equals(op) ||
+                    "==".equals(op) ||
+                    "!=".equals(op)
+            ) {
+
+                String register =
+                        newRegister();
+
+                targetCode.add(
+                        "MOV " +
+                        register +
+                        ", " +
+                        arg1
+                );
+
+                targetCode.add(
+                        "CMP " +
+                        register +
+                        ", " +
+                        arg2
+                );
+
+                targetCode.add(
+                        "MOV " +
+                        result +
+                        ", " +
+                        register
+                );
+            }
+
+            // =================================
+            // IF TRUE
+            // =================================
             else if ("IF".equals(op)) {
 
-                // SAFE FORMAT HANDLING
-                if (arg2.isEmpty()) {
-                    // format: IF condition GOTO label
-                    code.add("IF " + arg1 + " GOTO " + result);
-                } else {
-                    // format: IF temp GOTO label
-                    code.add("IF " + arg1 + " GOTO " + result);
-                }
+                targetCode.add(
+                        "JNZ " +
+                        arg1 +
+                        ", " +
+                        result
+                );
             }
 
-            // ================= GOTO =================
+            // =================================
+            // IF FALSE
+            // =================================
+            else if ("IFFALSE".equals(op)) {
+
+                targetCode.add(
+                        "JZ " +
+                        arg1 +
+                        ", " +
+                        result
+                );
+            }
+
+            // =================================
+            // GOTO
+            // =================================
             else if ("GOTO".equals(op)) {
-                code.add("JMP " + result);
+
+                targetCode.add(
+                        "JMP " +
+                        result
+                );
             }
 
-            // ================= LABEL =================
+            // =================================
+            // LABEL
+            // =================================
             else if ("LABEL".equals(op)) {
-                code.add(result + ":");
+
+                targetCode.add(
+                        result + ":"
+                );
+            }
+
+            // =================================
+            // PRINT
+            // =================================
+            else if ("PRINT".equals(op)) {
+
+                targetCode.add(
+                        "PRINT " +
+                        arg1
+                );
+            }
+
+            // =================================
+            // READ
+            // =================================
+            else if ("READ".equals(op)) {
+
+                targetCode.add(
+                        "READ " +
+                        result
+                );
+            }
+
+            // =================================
+            // RETURN
+            // =================================
+            else if ("RETURN".equals(op)) {
+
+                targetCode.add(
+                        "RETURN " +
+                        arg1
+                );
             }
         }
 
-        return code;
+        return targetCode;
+    }
+
+    // =========================================
+    // HANDLE ARITHMETIC OPERATIONS
+    // =========================================
+    private void handleArithmetic(
+            List<String> code,
+            String instruction,
+            String arg1,
+            String arg2,
+            String result
+    ) {
+
+        String register =
+                newRegister();
+
+        // MOV R1, a
+        code.add(
+                "MOV " +
+                register +
+                ", " +
+                arg1
+        );
+
+        // ADD/SUB/MUL/DIV
+        code.add(
+                instruction +
+                " " +
+                register +
+                ", " +
+                arg2
+        );
+
+        // MOV t1, R1
+        code.add(
+                "MOV " +
+                result +
+                ", " +
+                register
+        );
     }
 }

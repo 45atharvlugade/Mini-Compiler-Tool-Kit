@@ -1,8 +1,10 @@
 package com.rangers.main.model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,9 @@ public class SemanticAnalyzer {
     private Set<String> expressionSet = new HashSet<>();
     private Set<String> checked = new HashSet<>();
     private Set<String> errorSet = new HashSet<>();
+    private Set<String> constantTable = new HashSet<>();
+    private Map<String, String> stringTable = new HashMap<>();
+    private List<String> tempTable = new ArrayList<>();
 
     private int errorCount = 0;
     private List<String> errorTable = new ArrayList<>();
@@ -27,125 +32,313 @@ public class SemanticAnalyzer {
     // ===== MAIN METHOD =====
     public String analyze(ASTNode root) {
 
-        // 🔥 RESET EVERYTHING (MANDATORY)
+        // =========================================
+        // RESET EVERYTHING
+        // =========================================
         expressions.clear();
         typeTable.clear();
+
         expressionSet.clear();
         checked.clear();
         errorSet.clear();
+
+        constantTable.clear();
+        stringTable.clear();
+        tempTable.clear();
+
         errorTable.clear();
         errorCount = 0;
 
-        // 🔥 optional (only if you want fresh symbol table every time)
+        // optional fresh symbol table
         symbolTable.getTable().clear();
 
-        // now start analysis
+        // =========================================
+        // START SEMANTIC ANALYSIS
+        // =========================================
         visit(root);
 
         StringBuilder sb = new StringBuilder();
 
-        sb.append("===== PHASE 3: SEMANTIC ANALYSIS =====\n\n");
+        sb.append("====================================\n");
+        sb.append("     PHASE 3 : SEMANTIC ANALYSIS\n");
+        sb.append("====================================\n\n");
 
-        // ===== ERRORS =====
-        sb.append("ERRORS:\n");
+        // =========================================
+        // ERROR TABLE
+        // =========================================
+        sb.append("[ ERROR TABLE ]\n");
+
         if (errorTable.isEmpty()) {
+
             sb.append("No Semantic Errors\n");
+
         } else {
-            for (String e : errorTable) {
-                sb.append(e).append("\n");
+
+            for (String error : errorTable) {
+                sb.append(error).append("\n");
             }
+
+            sb.append("\nTotal Errors : ")
+              .append(errorCount)
+              .append("\n");
         }
 
-        // ===== SYMBOL TABLE =====
-        sb.append("\nSYMBOL TABLE:\n");
+        // =========================================
+        // SYMBOL TABLE
+        // =========================================
+        sb.append("\n[ SYMBOL TABLE ]\n");
+
         if (symbolTable.getTable().isEmpty()) {
-            sb.append("{}\n");
+
+            sb.append("Empty\n");
+
         } else {
-            symbolTable.getTable().forEach((k, v) ->
-                    sb.append(k).append(" → ").append(v).append("\n"));
+
+            symbolTable.getTable().forEach((key, value) -> {
+
+                sb.append(key)
+                  .append(" → ")
+                  .append(value)
+                  .append("\n");
+            });
         }
 
-        // ===== TYPE TABLE =====
-        sb.append("\nTYPE TABLE:\n");
+        // =========================================
+        // TYPE TABLE
+        // =========================================
+        sb.append("\n[ TYPE TABLE ]\n");
+
         if (typeTable.isEmpty()) {
+
             sb.append("Empty\n");
+
         } else {
-            for (String t : typeTable) {
-                sb.append(t).append("\n");
+
+            for (String type : typeTable) {
+                sb.append(type).append("\n");
             }
         }
 
-        // ===== EXPRESSION TABLE =====
-        sb.append("\nEXPRESSION TABLE:\n");
+        // =========================================
+        // EXPRESSION TABLE
+        // =========================================
+        sb.append("\n[ EXPRESSION TABLE ]\n");
+
         if (expressions.isEmpty()) {
+
             sb.append("Empty\n");
+
         } else {
-            for (String ex : expressions) {
-                sb.append(ex).append("\n");
+
+            for (String expr : expressions) {
+                sb.append(expr).append("\n");
             }
         }
+
+        // =========================================
+        // CONSTANT TABLE
+        // =========================================
+        sb.append("\n[ CONSTANT TABLE ]\n");
+
+        if (constantTable.isEmpty()) {
+
+            sb.append("Empty\n");
+
+        } else {
+
+            for (String constant : constantTable) {
+                sb.append(constant).append("\n");
+            }
+        }
+
+        // =========================================
+        // STRING LITERAL TABLE
+        // =========================================
+        sb.append("\n[ STRING LITERAL TABLE ]\n");
+
+        if (stringTable.isEmpty()) {
+
+            sb.append("Empty\n");
+
+        } else {
+
+            stringTable.forEach((key, value) -> {
+
+                sb.append(key)
+                  .append(" → ")
+                  .append(value)
+                  .append("\n");
+            });
+        }
+
+        // =========================================
+        // TEMPORARY VARIABLE TABLE
+        // =========================================
+        sb.append("\n[ TEMPORARY VARIABLE TABLE ]\n");
+
+        if (tempTable.isEmpty()) {
+
+            sb.append("Empty\n");
+
+        } else {
+
+            for (String temp : tempTable) {
+                sb.append(temp).append("\n");
+            }
+        }
+
+        sb.append("\n====================================\n");
+        sb.append("  SEMANTIC ANALYSIS COMPLETED\n");
+        sb.append("====================================\n");
 
         return sb.toString();
     }
 
     // ===== ERROR HANDLER (IMPORTANT) =====
-    private void addError(String msg) {
+    private void addError(String message) {
 
-        if (errorSet.contains(msg)) return; // avoid duplicates
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (message == null || message.isBlank()) {
+            return;
+        }
 
-        errorSet.add(msg);
+        // =========================================
+        // AVOID DUPLICATE ERRORS
+        // =========================================
+        if (errorSet.contains(message)) {
+            return;
+        }
 
+        errorSet.add(message);
+
+        // =========================================
+        // ERROR COUNT
+        // =========================================
         errorCount++;
 
-        errorTable.add("ERROR " + errorCount + ": " + msg);
+        // =========================================
+        // FORMAT ERROR MESSAGE
+        // =========================================
+        String formattedError =
+                String.format(
+                        "ERROR %d : %s",
+                        errorCount,
+                        message
+                );
+
+        // =========================================
+        // STORE ERROR
+        // =========================================
+        errorTable.add(formattedError);
     }
 
     // ===== AST VISITOR =====
     private void visit(ASTNode node) {
 
-        if (node == null) return;
+        // =========================================
+        // NULL SAFETY
+        // =========================================
+        if (node == null) {
+            return;
+        }
 
         switch (node.getType()) {
 
+            // =========================================
+            // ROOT / BLOCK NODES
+            // =========================================
             case "PROGRAM":
             case "STATEMENTS":
+
                 for (ASTNode child : node.getChildren()) {
                     visit(child);
                 }
+
                 break;
 
-            // 🔥 HANDLE IF PROPERLY
-            case "IF":
-                handleIf(node);
-                return;
-
-            // 🔥 HANDLE WHILE PROPERLY
-            case "WHILE":
-                handleWhile(node);
-                return;
-
-            // 🔥 DECLARATION
+            // =========================================
+            // DECLARATION
+            // =========================================
             case "DECLARATION":
+
                 handleDeclaration(node);
+
                 break;
 
-            // 🔥 ASSIGNMENT (post-order)
+            // =========================================
+            // ASSIGNMENT
+            // =========================================
             case "ASSIGN":
+
+                // Visit RHS first
                 if (node.getChildren().size() > 1) {
-                    visit(node.getChildren().get(1)); // RHS first
+                    visit(node.getChildren().get(1));
                 }
+
                 handleAssign(node);
+
                 break;
 
-            // 🔥 IDENTIFIER
+            // =========================================
+            // IF STATEMENT
+            // =========================================
+            case "IF":
+
+                handleIf(node);
+
+                break;
+
+            // =========================================
+            // WHILE LOOP
+            // =========================================
+            case "WHILE":
+
+                handleWhile(node);
+
+                break;
+
+            // =========================================
+            // IDENTIFIER
+            // =========================================
             case "IDENTIFIER":
+
                 checkVariable(node.getValue());
+
                 break;
 
+            // =========================================
+            // NUMBER CONSTANT
+            // =========================================
+            case "NUMBER":
+
+                constantTable.add(node.getValue());
+
+                break;
+
+            // =========================================
+            // STRING CONSTANT
+            // =========================================
+            case "STRING":
+
+                constantTable.add(node.getValue());
+
+                String label = "S" + (stringTable.size() + 1);
+
+                stringTable.put(label, node.getValue());
+
+                break;
+
+            // =========================================
+            // DEFAULT RECURSIVE VISIT
+            // =========================================
             default:
+
                 for (ASTNode child : node.getChildren()) {
                     visit(child);
                 }
+
                 break;
         }
     }
@@ -153,30 +346,105 @@ public class SemanticAnalyzer {
     // ===== DECLARATION =====
     private void handleDeclaration(ASTNode node) {
 
-        String varName = node.getChildren().get(0).getValue();
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (node == null || node.getChildren().isEmpty()) {
+            return;
+        }
 
-        // 🔥 prevent duplicate declaration processing
-        if (symbolTable.isDeclared(varName)) return;
+        // =========================================
+        // GET VARIABLE INFO
+        // =========================================
+        String dataType = node.getValue(); // int / string
 
-        // add to symbol table
-        symbolTable.declare(varName, "int");
+        String varName =
+                node.getChildren()
+                    .get(0)
+                    .getValue();
 
-        // add to type table
-        typeTable.add(varName + " → int");
+        // =========================================
+        // DUPLICATE DECLARATION CHECK
+        // =========================================
+        if (symbolTable.isDeclared(varName)) {
 
-        // 🔥 HANDLE INITIAL VALUE (VERY IMPORTANT)
+            addError(
+                    "Variable '" +
+                    varName +
+                    "' already declared"
+            );
+
+            return;
+        }
+
+        // =========================================
+        // ADD TO SYMBOL TABLE
+        // =========================================
+        symbolTable.declare(varName, dataType);
+
+        // =========================================
+        // ADD TO TYPE TABLE
+        // =========================================
+        typeTable.add(
+                varName +
+                " → " +
+                dataType
+        );
+
+        // =========================================
+        // HANDLE INITIAL VALUE
+        // =========================================
         if (node.getChildren().size() > 1) {
 
             ASTNode exprNode = node.getChildren().get(1);
 
+            // Validate identifiers inside expression
+            validateExpression(exprNode);
+
+            // =====================================
+            // TYPE CHECKING
+            // =====================================
+            String exprType = inferType(exprNode);
+
+            if (!dataType.equals(exprType)
+                    && !exprType.equals("unknown")) {
+
+                addError(
+                        "Type mismatch : cannot assign '" +
+                        exprType +
+                        "' to '" +
+                        dataType +
+                        "'"
+                );
+            }
+
+            // =====================================
+            // BUILD EXPRESSION
+            // =====================================
             String expr = buildExpression(exprNode);
 
-            String fullExpr = varName + " = " + expr;
+            String fullExpression =
+                    varName +
+                    " = " +
+                    expr;
 
-            // 🔥 avoid duplicates
-            if (!expressionSet.contains(fullExpr)) {
-                expressions.add(fullExpr);
-                expressionSet.add(fullExpr);
+            // =====================================
+            // STORE EXPRESSION
+            // =====================================
+            if (!expressionSet.contains(fullExpression)) {
+
+                expressions.add(fullExpression);
+
+                expressionSet.add(fullExpression);
+            }
+
+            // =====================================
+            // STORE CONSTANTS
+            // =====================================
+            if (exprNode.getType().equals("NUMBER") ||
+                exprNode.getType().equals("STRING")) {
+
+                constantTable.add(exprNode.getValue());
             }
         }
     }
@@ -184,90 +452,536 @@ public class SemanticAnalyzer {
     // ===== ASSIGNMENT =====
     private void handleAssign(ASTNode node) {
 
-        String varName = node.getChildren().get(0).getValue();
-
-        if (!symbolTable.isDeclared(varName)) {
-            addError("Variable '" + varName + "' not declared");
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (node == null || node.getChildren().size() < 2) {
+            return;
         }
 
-        if (node.getChildren().size() > 1) {
+        // =========================================
+        // GET VARIABLE NAME
+        // =========================================
+        String varName =
+                node.getChildren()
+                    .get(0)
+                    .getValue();
 
-            ASTNode exprNode = node.getChildren().get(1);
-            String expr = buildExpression(exprNode);
+        // =========================================
+        // VARIABLE MUST BE DECLARED
+        // =========================================
+        if (!symbolTable.isDeclared(varName)) {
 
-            String fullExpr = varName + " = " + expr;
+            addError(
+                    "Variable '" +
+                    varName +
+                    "' not declared"
+            );
 
-            // 🔥 prevent duplicates
-            if (!expressionSet.contains(fullExpr)) {
-                expressions.add(fullExpr);
-                expressionSet.add(fullExpr);
-            }
+            return;
+        }
+
+        // =========================================
+        // GET RHS EXPRESSION
+        // =========================================
+        ASTNode exprNode =
+                node.getChildren().get(1);
+
+        // =========================================
+        // VALIDATE IDENTIFIERS INSIDE EXPRESSION
+        // =========================================
+        validateExpression(exprNode);
+
+        // =========================================
+        // TYPE CHECKING
+        // =========================================
+        String variableType =
+                symbolTable.lookup(varName);
+
+        String expressionType =
+                inferType(exprNode);
+
+        if (!variableType.equals(expressionType)
+                && !expressionType.equals("unknown")) {
+
+            addError(
+                    "Type mismatch : cannot assign '" +
+                    expressionType +
+                    "' to '" +
+                    variableType +
+                    "'"
+            );
+        }
+
+        // =========================================
+        // BUILD EXPRESSION
+        // =========================================
+        String expr =
+                buildExpression(exprNode);
+
+        String fullExpression =
+                varName +
+                " = " +
+                expr;
+
+        // =========================================
+        // STORE EXPRESSION
+        // =========================================
+        if (!expressionSet.contains(fullExpression)) {
+
+            expressions.add(fullExpression);
+
+            expressionSet.add(fullExpression);
+        }
+
+        // =========================================
+        // STORE CONSTANTS
+        // =========================================
+        if (exprNode.getType().equals("NUMBER") ||
+            exprNode.getType().equals("STRING")) {
+
+            constantTable.add(exprNode.getValue());
         }
     }
 
     // ===== VARIABLE CHECK =====
     private void checkVariable(String name) {
 
-        if (checked.contains(name)) return;
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (name == null || name.isBlank()) {
+            return;
+        }
+
+        // =========================================
+        // AVOID DUPLICATE CHECKS
+        // =========================================
+        if (checked.contains(name)) {
+            return;
+        }
 
         checked.add(name);
 
+        // =========================================
+        // VARIABLE DECLARATION CHECK
+        // =========================================
         if (!symbolTable.isDeclared(name)) {
-            addError("Variable '" + name + "' not declared");
+
+            addError(
+                    "Variable '" +
+                    name +
+                    "' not declared"
+            );
         }
     }
 
     // ===== EXPRESSION BUILDER =====
     private String buildExpression(ASTNode node) {
 
-        if (node == null) return "";
-
-        if (node.getType().equals("IDENTIFIER") ||
-            node.getType().equals("NUMBER") ||
-            node.getType().equals("STRING")) {
-            return node.getValue();
+        // =========================================
+        // NULL SAFETY
+        // =========================================
+        if (node == null) {
+            return "";
         }
 
-        if (node.getChildren().size() == 2) {
+        // =========================================
+        // LEAF NODES
+        // =========================================
+        switch (node.getType()) {
 
-            String left = buildExpression(node.getChildren().get(0));
-            String right = buildExpression(node.getChildren().get(1));
+            case "IDENTIFIER":
+            case "NUMBER":
+            case "STRING":
 
-            return "(" + left + " " + node.getValue() + " " + right + ")";
+                return node.getValue();
         }
 
+        // =========================================
+        // UNARY EXPRESSIONS
+        // =========================================
+        if (node.getChildren().size() == 1) {
+
+            String childExpression =
+                    buildExpression(
+                            node.getChildren().get(0)
+                    );
+
+            return "(" +
+                    node.getValue() +
+                    childExpression +
+                    ")";
+        }
+
+        // =========================================
+        // BINARY EXPRESSIONS
+        // =========================================
+        if (node.getChildren().size() >= 2) {
+
+            String left =
+                    buildExpression(
+                            node.getChildren().get(0)
+                    );
+
+            String right =
+                    buildExpression(
+                            node.getChildren().get(1)
+                    );
+
+            return "(" +
+                    left +
+                    " " +
+                    node.getValue() +
+                    " " +
+                    right +
+                    ")";
+        }
+
+        // =========================================
+        // DEFAULT
+        // =========================================
         return node.getValue();
-    }
-    
+    }    
     private void handleIf(ASTNode node) {
 
-        // condition check
-        checkCondition(node.getChildren().get(0));
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (node == null || node.getChildren().size() < 2) {
 
-        // IF block
-        visit(node.getChildren().get(1));
+            addError("Invalid IF statement");
 
-        // ELSE block (if exists)
-        if (node.getChildren().size() > 2) {
-            visit(node.getChildren().get(2));
+            return;
         }
+
+        // =========================================
+        // CONDITION
+        // =========================================
+        ASTNode conditionNode =
+                node.getChildren().get(0);
+
+        // semantic validation
+        checkCondition(conditionNode);
+
+        // =========================================
+        // IF BLOCK
+        // =========================================
+        ASTNode ifBlock =
+                node.getChildren().get(1);
+
+        visit(ifBlock);
+
+        // =========================================
+        // ELSE BLOCK
+        // =========================================
+        if (node.getChildren().size() > 2) {
+
+            ASTNode elseBlock =
+                    node.getChildren().get(2);
+
+            visit(elseBlock);
+        }
+
+        // =========================================
+        // STORE TEMP LABEL INFO (OPTIONAL)
+        // =========================================
+        String tempLabel =
+                "IF_TEMP_" + (tempTable.size() + 1);
+
+        tempTable.add(tempLabel);
     }
     
     private void handleWhile(ASTNode node) {
 
-        // condition check
-        checkCondition(node.getChildren().get(0));
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (node == null || node.getChildren().size() < 2) {
 
-        // loop body
-        visit(node.getChildren().get(1));
+            addError("Invalid WHILE statement");
+
+            return;
+        }
+
+        // =========================================
+        // CONDITION
+        // =========================================
+        ASTNode conditionNode =
+                node.getChildren().get(0);
+
+        // semantic validation
+        checkCondition(conditionNode);
+
+        // =========================================
+        // LOOP BODY
+        // =========================================
+        ASTNode loopBody =
+                node.getChildren().get(1);
+
+        visit(loopBody);
+
+        // =========================================
+        // STORE LOOP TEMP INFO
+        // =========================================
+        String tempLabel =
+                "WHILE_TEMP_" + (tempTable.size() + 1);
+
+        tempTable.add(tempLabel);
     }
     
     private void checkCondition(ASTNode node) {
 
-        String left = node.getChildren().get(0).getValue();
-        String right = node.getChildren().get(2).getValue();
+        // =========================================
+        // SAFETY CHECK
+        // =========================================
+        if (node == null) {
 
-        checkVariable(left);
-        checkVariable(right);
+            addError("Invalid condition");
+
+            return;
+        }
+
+        // =========================================
+        // VALIDATE IDENTIFIERS
+        // =========================================
+        validateExpression(node);
+
+        // =========================================
+        // CONDITION MUST BE BINARY
+        // =========================================
+        if (node.getChildren().size() < 2) {
+
+            addError("Incomplete condition expression");
+
+            return;
+        }
+
+        // =========================================
+        // GET CONDITION TYPES
+        // =========================================
+        ASTNode leftNode =
+                node.getChildren().get(0);
+
+        ASTNode rightNode =
+                node.getChildren().get(1);
+
+        String leftType =
+                inferType(leftNode);
+
+        String rightType =
+                inferType(rightNode);
+
+        // =========================================
+        // TYPE COMPATIBILITY CHECK
+        // =========================================
+        if (!leftType.equals(rightType)
+                && !leftType.equals("unknown")
+                && !rightType.equals("unknown")) {
+
+            addError(
+                    "Condition type mismatch : '" +
+                    leftType +
+                    "' and '" +
+                    rightType +
+                    "'"
+            );
+        }
+
+        // =========================================
+        // STORE CONDITION EXPRESSION
+        // =========================================
+        String conditionExpression =
+                buildExpression(node);
+
+        if (!expressionSet.contains(conditionExpression)) {
+
+            expressions.add(conditionExpression);
+
+            expressionSet.add(conditionExpression);
+        }
+    }
+    
+    
+    private void validateExpression(ASTNode node) {
+
+        // =========================================
+        // NULL SAFETY
+        // =========================================
+        if (node == null) {
+            return;
+        }
+
+        // =========================================
+        // IDENTIFIER VALIDATION
+        // =========================================
+        if (node.getType().equals("IDENTIFIER")) {
+
+            checkVariable(node.getValue());
+        }
+
+        // =========================================
+        // CONSTANT HANDLING
+        // =========================================
+        else if (node.getType().equals("NUMBER")) {
+
+            constantTable.add(node.getValue());
+        }
+
+        else if (node.getType().equals("STRING")) {
+
+            constantTable.add(node.getValue());
+
+            // avoid duplicate string entries
+            boolean exists =
+                    stringTable.containsValue(node.getValue());
+
+            if (!exists) {
+
+                String label =
+                        "S" + (stringTable.size() + 1);
+
+                stringTable.put(label, node.getValue());
+            }
+        }
+
+        // =========================================
+        // TEMP VARIABLE TRACKING
+        // =========================================
+        if (node.getChildren().size() >= 2) {
+
+            String tempName =
+                    "t" + (tempTable.size() + 1);
+
+            if (!tempTable.contains(tempName)) {
+
+                tempTable.add(tempName);
+            }
+        }
+
+        // =========================================
+        // RECURSIVE VALIDATION
+        // =========================================
+        for (ASTNode child : node.getChildren()) {
+
+            validateExpression(child);
+        }
+    }
+    
+    private String inferType(ASTNode node) {
+
+        // =========================================
+        // NULL SAFETY
+        // =========================================
+        if (node == null) {
+            return "unknown";
+        }
+
+        switch (node.getType()) {
+
+            // =====================================
+            // INTEGER TYPE
+            // =====================================
+            case "NUMBER":
+                return "int";
+
+            // =====================================
+            // STRING TYPE
+            // =====================================
+            case "STRING":
+                return "string";
+
+            // =====================================
+            // IDENTIFIER TYPE
+            // =====================================
+            case "IDENTIFIER":
+
+                if (symbolTable.isDeclared(node.getValue())) {
+
+                    return symbolTable.lookup(
+                            node.getValue()
+                    );
+                }
+
+                return "unknown";
+
+            // =====================================
+            // BOOLEAN / RELATIONAL EXPRESSIONS
+            // =====================================
+            case "LT":
+            case "GT":
+            case "LTE":
+            case "GTE":
+            case "EQ":
+            case "NEQ":
+
+                return "boolean";
+
+            // =====================================
+            // OPERATOR EXPRESSIONS
+            // =====================================
+            default:
+
+                // unary expression
+                if (node.getChildren().size() == 1) {
+
+                    return inferType(
+                            node.getChildren().get(0)
+                    );
+                }
+
+                // binary expression
+                if (node.getChildren().size() >= 2) {
+
+                    String leftType =
+                            inferType(
+                                    node.getChildren().get(0)
+                            );
+
+                    String rightType =
+                            inferType(
+                                    node.getChildren().get(1)
+                            );
+
+                    // =================================
+                    // SAME TYPES
+                    // =================================
+                    if (leftType.equals(rightType)) {
+
+                        // relational operators
+                        if (isRelationalOperator(
+                                node.getValue())) {
+
+                            return "boolean";
+                        }
+
+                        return leftType;
+                    }
+
+                    // =================================
+                    // INVALID TYPE COMBINATION
+                    // =================================
+                    addError(
+                            "Invalid expression between '" +
+                            leftType +
+                            "' and '" +
+                            rightType +
+                            "'"
+                    );
+
+                    return "unknown";
+                }
+
+                return "unknown";
+        }
+    }
+    private boolean isRelationalOperator(String operator) {
+
+        return operator.equals("<")  ||
+               operator.equals(">")  ||
+               operator.equals("<=") ||
+               operator.equals(">=") ||
+               operator.equals("==") ||
+               operator.equals("!=");
     }
 }

@@ -9,30 +9,121 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class TAC {
 
+    // =========================================
+    // THREE ADDRESS CODE FIELDS
+    // =========================================
     private String op;
+
     private String arg1;
+
     private String arg2;
+
     private String result;
 
+    // =========================================
+    // TAC STRING FORMAT
+    // =========================================
     @Override
     public String toString() {
 
-        if ("IF".equals(op)) {
-            return "IF " + arg1 + " GOTO " + result;
+        // null safety
+        String operation = safe(op);
+        String a1 = safe(arg1);
+        String a2 = safe(arg2);
+        String res = safe(result);
+
+        switch (operation) {
+
+            // =================================
+            // LABEL
+            // =================================
+            case "LABEL":
+                return res + ":";
+
+            // =================================
+            // UNCONDITIONAL JUMP
+            // =================================
+            case "GOTO":
+                return "GOTO " + res;
+
+            // =================================
+            // CONDITIONAL JUMP
+            // =================================
+            case "IF":
+                return "IF " + a1 + " GOTO " + res;
+
+            // =================================
+            // CONDITIONAL FALSE JUMP
+            // =================================
+            case "IFFALSE":
+                return "IF FALSE " + a1 + " GOTO " + res;
+
+            // =================================
+            // ASSIGNMENT
+            // =================================
+            case "=":
+                return res + " = " + a1;
+
+            // =================================
+            // PRINT
+            // =================================
+            case "PRINT":
+                return "PRINT " + a1;
+
+            // =================================
+            // READ INPUT
+            // =================================
+            case "READ":
+                return "READ " + res;
+
+            // =================================
+            // FUNCTION PARAMETER
+            // =================================
+            case "PARAM":
+                return "PARAM " + a1;
+
+            // =================================
+            // FUNCTION CALL
+            // =================================
+            case "CALL":
+                return res + " = CALL " + a1;
+
+            // =================================
+            // RETURN
+            // =================================
+            case "RETURN":
+                return "RETURN " + a1;
         }
 
-        if ("GOTO".equals(op)) {
-            return "GOTO " + result;
+        // =====================================
+        // UNARY OPERATIONS
+        // =====================================
+        if (a2.isBlank() || a2.equals("-")) {
+
+            return res +
+                    " = " +
+                    operation +
+                    " " +
+                    a1;
         }
 
-        if ("LABEL".equals(op)) {
-            return result + ":";
-        }
+        // =====================================
+        // BINARY OPERATIONS
+        // =====================================
+        return res +
+                " = " +
+                a1 +
+                " " +
+                operation +
+                " " +
+                a2;
+    }
 
-        if ("=".equals(op)) {
-            return result + " = " + arg1;
-        }
+    // =========================================
+    // NULL SAFETY
+    // =========================================
+    private String safe(String value) {
 
-        return result + " = " + arg1 + " " + op + " " + arg2;
+        return value == null ? "" : value;
     }
 }

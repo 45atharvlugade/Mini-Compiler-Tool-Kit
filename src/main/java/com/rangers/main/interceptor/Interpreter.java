@@ -1,215 +1,498 @@
 package com.rangers.main.interceptor;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
 @Component
 public class Interpreter {
 
-    private Map<String, Integer> memory = new HashMap<>();
-    private Map<String, Integer> labels = new HashMap<>();
+    // =========================================
+    // MEMORY
+    // =========================================
+    private Map<String, Object> memory =
+            new HashMap<>();
 
-    private StringBuilder output = new StringBuilder();
-    private StringBuilder trace = new StringBuilder();
+    // =========================================
+    // LABEL TABLE
+    // =========================================
+    private Map<String, Integer> labels =
+            new HashMap<>();
 
+    // =========================================
+    // OUTPUT & TRACE
+    // =========================================
+    private StringBuilder output =
+            new StringBuilder();
+
+    private StringBuilder trace =
+            new StringBuilder();
+
+    // =========================================
+    // MAIN EXECUTOR
+    // =========================================
     public String execute(List<String> code) {
 
         memory.clear();
         labels.clear();
+
         output.setLength(0);
         trace.setLength(0);
 
-        // ================= FIRST PASS (LABELS) =================
+        // =====================================
+        // FIRST PASS -> STORE LABELS
+        // =====================================
         for (int i = 0; i < code.size(); i++) {
 
-            String line = clean(code.get(i));
+            String line =
+                    clean(code.get(i));
 
             if (line.endsWith(":")) {
-                String label = line.replace(":", "").trim();
 
-                // store NEXT instruction index (IMPORTANT FIX)
-                labels.put(label, i + 1);
+                String label =
+                        line.replace(":", "")
+                            .trim();
+
+                labels.put(label, i);
             }
         }
 
-        // ================= EXECUTION =================
+        // =====================================
+        // EXECUTION
+        // =====================================
         for (int i = 0; i < code.size(); i++) {
 
-            String instruction = clean(code.get(i));
+            String instruction =
+                    clean(code.get(i));
 
-            trace.append("\n[LINE ").append(i).append("] ").append(instruction);
-
-            if (instruction.isEmpty()) continue;
-
-            // ================= LABEL =================
-            if (instruction.endsWith(":")) {
+            if (instruction.isBlank()) {
                 continue;
             }
 
-            // ================= GOTO / JMP =================
-            if (instruction.startsWith("goto") || instruction.startsWith("JMP")) {
+            trace.append("\n[LINE ")
+                 .append(i)
+                 .append("] ")
+                 .append(instruction);
 
-                String[] parts = instruction.split("\\s+");
+            // =================================
+            // LABEL
+            // =================================
+            if (instruction.endsWith(":")) {
+
+                trace.append(" → LABEL");
+
+                continue;
+            }
+
+            // =================================
+            // JMP
+            // =================================
+            if (instruction.startsWith("JMP")) {
+
+                String[] parts =
+                        instruction.split("\\s+");
+
                 String label = parts[1];
 
-                trace.append(" → GOTO ").append(label);
+                trace.append(" → JUMP ")
+                     .append(label);
 
-                Integer jumpIndex = labels.get(label);
+                Integer jump =
+                        labels.get(label);
 
-                if (jumpIndex == null) {
-                    throw new RuntimeException("Undefined label: " + label);
+                if (jump == null) {
+
+                    throw new RuntimeException(
+                            "Undefined label: "
+                            + label
+                    );
                 }
 
-                i = jumpIndex;
+                i = jump;
+
                 continue;
             }
 
-            // ================= IF FALSE =================
-            if (instruction.startsWith("ifFalse")) {
+            // =================================
+            // JNZ
+            // =================================
+            if (instruction.startsWith("JNZ")) {
 
-                String temp = instruction.substring(7).trim(); // remove "ifFalse"
+                String temp =
+                        instruction.substring(3)
+                                   .trim();
 
-                String condition = temp.substring(0, temp.lastIndexOf("goto")).trim();
-                String label = temp.substring(temp.lastIndexOf("goto") + 4).trim();
+                String[] parts =
+                        temp.split(",");
 
-                int result = evaluateCondition(condition);
+                String condition =
+                        parts[0].trim();
 
-                if (result == 0) {
+                String label =
+                        parts[1].trim();
 
-                    trace.append(" → ifFalse TRUE (jump)");
+                int value =
+                        toInt(
+                                evaluate(condition)
+                        );
 
-                    Integer jumpIndex = labels.get(label);
+                if (value != 0) {
 
-                    if (jumpIndex == null) {
-                        throw new RuntimeException("Undefined label: " + label);
+                    trace.append(" → TRUE JUMP ")
+                         .append(label);
+
+                    Integer jump =
+                            labels.get(label);
+
+                    if (jump == null) {
+
+                        throw new RuntimeException(
+                                "Undefined label: "
+                                + label
+                        );
                     }
 
-                    i = jumpIndex - 1; // adjust for loop increment
+                    i = jump;
+
                     continue;
-                } else {
-                    trace.append(" → ifFalse FALSE");
                 }
+
+                trace.append(" → FALSE");
             }
 
-            // ================= ASSIGNMENT =================
-            else if (instruction.contains("=")) {
+            // =================================
+            // JZ
+            // =================================
+            else if (instruction.startsWith("JZ")) {
 
-                String[] parts = instruction.split("=");
-                String left = parts[0].trim();
-                String right = parts[1].trim();
+                String temp =
+                        instruction.substring(2)
+                                   .trim();
 
-                int value = evaluate(right);
-                memory.put(left, value);
+                String[] parts =
+                        temp.split(",");
 
-                trace.append(" → ").append(left)
-                      .append(" = ").append(value);
+                String condition =
+                        parts[0].trim();
+
+                String label =
+                        parts[1].trim();
+
+                int value =
+                        toInt(
+                                evaluate(condition)
+                        );
+
+                if (value == 0) {
+
+                    trace.append(" → ZERO JUMP ")
+                         .append(label);
+
+                    Integer jump =
+                            labels.get(label);
+
+                    if (jump == null) {
+
+                        throw new RuntimeException(
+                                "Undefined label: "
+                                + label
+                        );
+                    }
+
+                    i = jump;
+
+                    continue;
+                }
+
+                trace.append(" → NON ZERO");
             }
 
-            // ================= PRINT =================
+            // =================================
+            // PRINT
+            // =================================
             else if (instruction.startsWith("PRINT")) {
 
-                String expr = instruction.replace("PRINT", "").trim();
+                String expr =
+                        instruction
+                        .replace("PRINT", "")
+                        .trim();
 
-                int val;
+                Object value =
+                        evaluate(expr);
 
-                if (memory.containsKey(expr)) {
-                    val = memory.get(expr);
-                } else if (isNumeric(expr)) {
-                    val = Integer.parseInt(expr);
-                } else {
-                    throw new RuntimeException("Undefined variable in PRINT: " + expr);
-                }
+                output.append(value)
+                      .append("\n");
 
-                output.append(val).append("\n");
-                trace.append(" → PRINT ").append(val);
+                trace.append(" → OUTPUT ")
+                     .append(value);
+            }
+
+            // =================================
+            // READ
+            // =================================
+            else if (instruction.startsWith("READ")) {
+
+                String var =
+                        instruction
+                        .replace("READ", "")
+                        .trim();
+
+                memory.put(var, 0);
+
+                trace.append(" → INPUT ")
+                     .append(var);
+            }
+
+            // =================================
+            // CMP
+            // =================================
+            else if (instruction.startsWith("CMP")) {
+
+                trace.append(" → COMPARE");
+            }
+
+            // =================================
+            // MOV
+            // =================================
+            else if (instruction.startsWith("MOV")) {
+
+                String temp =
+                        instruction
+                        .replace("MOV", "")
+                        .trim();
+
+                String[] parts =
+                        temp.split(",");
+
+                String left =
+                        parts[0].trim();
+
+                String right =
+                        parts[1].trim();
+
+                Object value =
+                        evaluate(right);
+
+                memory.put(left, value);
+
+                trace.append(" → ")
+                     .append(left)
+                     .append(" = ")
+                     .append(value);
+            }
+
+            // =================================
+            // ADD
+            // =================================
+            else if (instruction.startsWith("ADD")) {
+
+                arithmetic(
+                        instruction,
+                        "+"
+                );
+            }
+
+            // =================================
+            // SUB
+            // =================================
+            else if (instruction.startsWith("SUB")) {
+
+                arithmetic(
+                        instruction,
+                        "-"
+                );
+            }
+
+            // =================================
+            // MUL
+            // =================================
+            else if (instruction.startsWith("MUL")) {
+
+                arithmetic(
+                        instruction,
+                        "*"
+                );
+            }
+
+            // =================================
+            // DIV
+            // =================================
+            else if (instruction.startsWith("DIV")) {
+
+                arithmetic(
+                        instruction,
+                        "/"
+                );
             }
         }
 
-        return "OUTPUT:\n" + output.toString().trim()
-             + "\n\nTRACE:\n" + trace.toString();
+        // =====================================
+        // FINAL RESULT
+        // =====================================
+        return
+                "============= OUTPUT =============\n\n"
+                +
+                output.toString()
+                +
+                "\n============= TRACE ============="
+                +
+                trace.toString()
+                +
+                "\n\n============= MEMORY =============\n"
+                +
+                memory;
     }
 
-    // ================= CLEAN =================
-    private String clean(String line) {
-        if (line == null) return "";
-        return line.replace("\n", "")
-                   .replace("\r", "")
-                   .trim();
+    // =========================================
+    // ARITHMETIC EXECUTOR
+    // =========================================
+    private void arithmetic(
+            String instruction,
+            String op
+    ) {
+
+        String temp =
+                instruction
+                .substring(3)
+                .trim();
+
+        String[] parts =
+                temp.split(",");
+
+        String register =
+                parts[0].trim();
+
+        String valueExpr =
+                parts[1].trim();
+
+        int left =
+                toInt(
+                        evaluate(register)
+                );
+
+        int right =
+                toInt(
+                        evaluate(valueExpr)
+                );
+
+        int result = 0;
+
+        switch (op) {
+
+            case "+":
+                result = left + right;
+                break;
+
+            case "-":
+                result = left - right;
+                break;
+
+            case "*":
+                result = left * right;
+                break;
+
+            case "/":
+                result = left / right;
+                break;
+        }
+
+        memory.put(register, result);
+
+        trace.append(" → ")
+             .append(register)
+             .append(" = ")
+             .append(result);
     }
 
-    // ================= EVALUATOR =================
-    private int evaluate(String expr) {
+    // =========================================
+    // EVALUATE
+    // =========================================
+    private Object evaluate(String expr) {
 
         expr = expr.trim();
 
-        if (isNumeric(expr)) return Integer.parseInt(expr);
+        // =====================================
+        // STRING
+        // =====================================
+        if (
+                expr.startsWith("\"")
+                &&
+                expr.endsWith("\"")
+        ) {
 
-        if (memory.containsKey(expr)) return memory.get(expr);
-
-        if (expr.contains("+")) {
-            String[] p = expr.split("\\+");
-            return evaluate(p[0]) + evaluate(p[1]);
+            return expr.substring(
+                    1,
+                    expr.length() - 1
+            );
         }
 
-        if (expr.contains("-")) {
-            String[] p = expr.split("\\-");
-            return evaluate(p[0]) - evaluate(p[1]);
+        // =====================================
+        // NUMBER
+        // =====================================
+        if (isNumeric(expr)) {
+
+            return Integer.parseInt(expr);
         }
 
-        if (expr.contains("*")) {
-            String[] p = expr.split("\\*");
-            return evaluate(p[0]) * evaluate(p[1]);
+        // =====================================
+        // BOOLEAN
+        // =====================================
+        if ("true".equals(expr)) {
+            return 1;
         }
 
-        if (expr.contains("/")) {
-            String[] p = expr.split("\\/");
-            return evaluate(p[0]) / evaluate(p[1]);
+        if ("false".equals(expr)) {
+            return 0;
         }
 
-        throw new RuntimeException("Invalid expression: " + expr);
+        // =====================================
+        // VARIABLE
+        // =====================================
+        if (memory.containsKey(expr)) {
+
+            return memory.get(expr);
+        }
+
+        return expr;
     }
 
+    // =========================================
+    // TO INTEGER
+    // =========================================
+    private int toInt(Object obj) {
+
+        if (obj instanceof Integer) {
+
+            return (Integer) obj;
+        }
+
+        return Integer.parseInt(
+                obj.toString()
+        );
+    }
+
+    // =========================================
+    // NUMERIC CHECK
+    // =========================================
     private boolean isNumeric(String str) {
+
         return str.matches("-?\\d+");
     }
-    
-    private int evaluateCondition(String expr) {
 
-        expr = expr.trim();
+    // =========================================
+    // CLEAN
+    // =========================================
+    private String clean(String line) {
 
-        String[] parts;
-
-        if (expr.contains("<")) {
-            parts = expr.split("<");
-            return evaluate(parts[0].trim()) < evaluate(parts[1].trim()) ? 1 : 0;
+        if (line == null) {
+            return "";
         }
 
-        if (expr.contains(">")) {
-            parts = expr.split(">");
-            return evaluate(parts[0].trim()) > evaluate(parts[1].trim()) ? 1 : 0;
-        }
-
-        if (expr.contains("==")) {
-            parts = expr.split("==");
-            return evaluate(parts[0].trim()) == evaluate(parts[1].trim()) ? 1 : 0;
-        }
-
-        if (expr.contains("!=")) {
-            parts = expr.split("!=");
-            return evaluate(parts[0].trim()) != evaluate(parts[1].trim()) ? 1 : 0;
-        }
-
-        if (expr.contains("<=")) {
-            parts = expr.split("<=");
-            return evaluate(parts[0].trim()) <= evaluate(parts[1].trim()) ? 1 : 0;
-        }
-
-        if (expr.contains(">=")) {
-            parts = expr.split(">=");
-            return evaluate(parts[0].trim()) >= evaluate(parts[1].trim()) ? 1 : 0;
-        }
-
-        throw new RuntimeException("Invalid condition: " + expr);
+        return line
+                .replace("\n", "")
+                .replace("\r", "")
+                .trim();
     }
 }
