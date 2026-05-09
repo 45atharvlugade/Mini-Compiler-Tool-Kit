@@ -256,16 +256,6 @@ public class SemanticAnalyzer {
 
                 break;
 
-            // 🔥 HANDLE IF PROPERLY
-            case "IF":
-                handleIf(node);
-                return;
-
-            // 🔥 HANDLE WHILE PROPERLY
-            case "WHILE":
-                handleWhile(node);
-                return;
-
             // 🔥 DECLARATION
             case "DECLARATION":
 
@@ -418,9 +408,9 @@ public class SemanticAnalyzer {
                     expr;
 
             // 🔥 avoid duplicates
-            if (!expressionSet.contains(fullExpr)) {
-                expressions.add(fullExpr);
-                expressionSet.add(fullExpr);
+            if (!expressionSet.contains(fullExpression)) {
+                expressions.add(fullExpression);
+                expressionSet.add(fullExpression);
             }
         }
     }
@@ -500,11 +490,10 @@ public class SemanticAnalyzer {
                 " = " +
                 expr;
 
-            // 🔥 prevent duplicates
-            if (!expressionSet.contains(fullExpr)) {
-                expressions.add(fullExpr);
-                expressionSet.add(fullExpr);
-            }
+        // 🔥 prevent duplicates
+        if (!expressionSet.contains(fullExpression)) {
+            expressions.add(fullExpression);
+            expressionSet.add(fullExpression);
         }
     }
 

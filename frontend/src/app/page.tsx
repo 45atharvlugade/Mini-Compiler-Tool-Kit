@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 
-const API_BASE_URL = 'http://localhost:8080/compiler';
+const API_BASE_URL = 'http://localhost:4041/compiler';
 
-type TabType = 'lexer' | 'parser' | 'semantic' | 'tac' | 'quadruple' | 'target' | 'full' | 'execution';
+type TabType = 'lexer' | 'parser' | 'semantic' | 'tac' | 'quadruple' | 'triples' | 'indirectTriples' | 'target' | 'full' | 'execution';
 
 interface Token {
   type: string;
@@ -45,14 +45,25 @@ export default function Home() {
 
     await Promise.all([
       fetchPhase('/phase1/lexer', 'lexer', true),
-      fetchPhase('/phase2/parser', 'parser', false),
+      fetchPhase('/phase2/parser/text', 'parser', false),
       fetchPhase('/phase3/semantic', 'semantic', false),
-      fetchPhase('/phase4/tac', 'tac', false),
-      fetchPhase('/phase4/quadruple', 'quadruple', false),
+      fetchPhase('/phase4/ir-tables', 'ir', true),
       fetchPhase('/phase6/target', 'target', false),
-      fetchPhase('/compile/full', 'full', true),
-      fetchPhase('/compile-file', 'execution', false)
+      fetchPhase('/all', 'full', true),
+      fetchPhase('/compile', 'execution', false)
     ]);
+
+    if (newResults.ir && !newResults.ir.error && typeof newResults.ir === 'object') {
+      newResults.tac = newResults.ir.tac;
+      newResults.quadruple = newResults.ir.quadruples;
+      newResults.triples = newResults.ir.triples;
+      newResults.indirectTriples = newResults.ir.indirectTriples;
+    } else {
+      newResults.tac = newResults.ir;
+      newResults.quadruple = newResults.ir;
+      newResults.triples = newResults.ir;
+      newResults.indirectTriples = newResults.ir;
+    }
 
     setResults(newResults);
     setIsLoading(false);
@@ -89,26 +100,37 @@ export default function Home() {
     let symbolTable: string[] = [];
     let typeTable: string[] = [];
     let expressions: string[] = [];
+    let constants: string[] = [];
+    let strings: string[] = [];
+    let temps: string[] = [];
 
     let currentSection = '';
 
     data.split('\n').forEach(line => {
       const trimmed = line.trim();
-      if (trimmed.startsWith('ERRORS:')) currentSection = 'ERRORS';
-      else if (trimmed.startsWith('SYMBOL TABLE:')) currentSection = 'SYMBOL TABLE';
-      else if (trimmed.startsWith('TYPE TABLE:')) currentSection = 'TYPE TABLE';
-      else if (trimmed.startsWith('EXPRESSION TABLE:')) currentSection = 'EXPRESSION TABLE';
-      else if (trimmed && !trimmed.startsWith('=====') && currentSection) {
+      if (trimmed === '[ ERROR TABLE ]' || trimmed.startsWith('ERRORS:')) currentSection = 'ERRORS';
+      else if (trimmed === '[ SYMBOL TABLE ]' || trimmed.startsWith('SYMBOL TABLE:')) currentSection = 'SYMBOL TABLE';
+      else if (trimmed === '[ TYPE TABLE ]' || trimmed.startsWith('TYPE TABLE:')) currentSection = 'TYPE TABLE';
+      else if (trimmed === '[ EXPRESSION TABLE ]' || trimmed.startsWith('EXPRESSION TABLE:')) currentSection = 'EXPRESSION TABLE';
+      else if (trimmed === '[ CONSTANT TABLE ]') currentSection = 'CONSTANT TABLE';
+      else if (trimmed === '[ STRING LITERAL TABLE ]') currentSection = 'STRING TABLE';
+      else if (trimmed === '[ TEMPORARY VARIABLE TABLE ]') currentSection = 'TEMP TABLE';
+      else if (trimmed && !trimmed.startsWith('=====') && !trimmed.startsWith('[ ') && currentSection) {
         if (currentSection === 'ERRORS') errors.push(trimmed);
-        if (currentSection === 'SYMBOL TABLE') symbolTable.push(trimmed);
-        if (currentSection === 'TYPE TABLE') typeTable.push(trimmed);
-        if (currentSection === 'EXPRESSION TABLE') expressions.push(trimmed);
+        else if (currentSection === 'SYMBOL TABLE') symbolTable.push(trimmed);
+        else if (currentSection === 'TYPE TABLE') typeTable.push(trimmed);
+        else if (currentSection === 'EXPRESSION TABLE') expressions.push(trimmed);
+        else if (currentSection === 'CONSTANT TABLE') constants.push(trimmed);
+        else if (currentSection === 'STRING TABLE') strings.push(trimmed);
+        else if (currentSection === 'TEMP TABLE') temps.push(trimmed);
       }
     });
 
+    const isEmpty = (arr: string[]) => arr.length === 0 || (arr.length === 1 && (arr[0] === 'Empty' || arr[0] === '{}'));
+
     return (
       <div className="semantic-grid animated">
-        <div className="report-card">
+        <div className="report-card" style={{ gridColumn: '1 / -1' }}>
           <h4>Errors</h4>
           {errors.length === 1 && errors[0].includes('No') ? (
             <div style={{color: 'var(--success)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>{errors[0]}</div>
@@ -120,27 +142,85 @@ export default function Home() {
         </div>
         <div className="report-card">
           <h4>Symbol Table</h4>
-          {symbolTable.length === 0 || (symbolTable.length === 1 && symbolTable[0] === '{}') ? (
-            <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div>
-          ) : (
-            <div className="raw-output" style={{ color: '#fcd34d' }}>{symbolTable.join('\n')}</div>
-          )}
+          {isEmpty(symbolTable) ? <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div> : <div className="raw-output" style={{ color: '#fcd34d' }}>{symbolTable.join('\n')}</div>}
         </div>
         <div className="report-card">
           <h4>Type Table</h4>
-          {typeTable.length === 0 || (typeTable.length === 1 && typeTable[0] === 'Empty') ? (
-            <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div>
-          ) : (
-            <div className="raw-output" style={{ color: '#38bdf8' }}>{typeTable.join('\n')}</div>
-          )}
+          {isEmpty(typeTable) ? <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div> : <div className="raw-output" style={{ color: '#38bdf8' }}>{typeTable.join('\n')}</div>}
         </div>
         <div className="report-card">
           <h4>Expression Table</h4>
-          {expressions.length === 0 || (expressions.length === 1 && expressions[0] === 'Empty') ? (
-            <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div>
-          ) : (
-            <div className="raw-output" style={{ color: '#a78bfa' }}>{expressions.join('\n')}</div>
-          )}
+          {isEmpty(expressions) ? <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div> : <div className="raw-output" style={{ color: '#a78bfa' }}>{expressions.join('\n')}</div>}
+        </div>
+        <div className="report-card">
+          <h4>Constant Table</h4>
+          {isEmpty(constants) ? <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div> : <div className="raw-output" style={{ color: '#fb7185' }}>{constants.join('\n')}</div>}
+        </div>
+        <div className="report-card">
+          <h4>String Literal Table</h4>
+          {isEmpty(strings) ? <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div> : <div className="raw-output" style={{ color: '#34d399' }}>{strings.join('\n')}</div>}
+        </div>
+        <div className="report-card">
+          <h4>Temp Variable Table</h4>
+          {isEmpty(temps) ? <div style={{color: 'var(--text-secondary)', fontFamily: 'Fira Code', fontSize: '0.9rem'}}>Empty</div> : <div className="raw-output" style={{ color: '#c084fc' }}>{temps.join('\n')}</div>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderExecution = (data: string) => {
+    let outputData = '';
+    let traceData = '';
+    let memoryData = '';
+
+    let currentSection = '';
+    const lines = data.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '============= OUTPUT =============') {
+        currentSection = 'OUTPUT';
+        continue;
+      } else if (trimmed === '============= TRACE =============') {
+        currentSection = 'TRACE';
+        continue;
+      } else if (trimmed === '============= MEMORY =============') {
+        currentSection = 'MEMORY';
+        continue;
+      }
+
+      if (currentSection === 'OUTPUT') {
+        outputData += line + '\n';
+      } else if (currentSection === 'TRACE') {
+        traceData += line + '\n';
+      } else if (currentSection === 'MEMORY') {
+        memoryData += line + '\n';
+      }
+    }
+
+    outputData = outputData.trim();
+    traceData = traceData.trim();
+    memoryData = memoryData.trim();
+
+    return (
+      <div className="semantic-grid animated">
+        <div className="report-card" style={{ gridColumn: '1 / -1' }}>
+          <h4 style={{ color: '#34d399', marginBottom: '1rem' }}>Program Output</h4>
+          <div className="raw-output" style={{ color: '#f8fafc', fontSize: '1.1rem', backgroundColor: '#0f172a', padding: '1rem', borderRadius: '4px' }}>
+            {outputData || 'No output'}
+          </div>
+        </div>
+        <div className="report-card">
+          <h4 style={{ color: '#fcd34d', marginBottom: '1rem' }}>Execution Trace</h4>
+          <div className="raw-output" style={{ color: '#cbd5e1' }}>
+            {traceData || 'No trace generated'}
+          </div>
+        </div>
+        <div className="report-card">
+          <h4 style={{ color: '#38bdf8', marginBottom: '1rem' }}>Memory State</h4>
+          <div className="raw-output" style={{ color: '#93c5fd' }}>
+            {memoryData || 'Empty memory'}
+          </div>
         </div>
       </div>
     );
@@ -172,8 +252,20 @@ export default function Home() {
     );
   };
 
-  const renderTAC = (data: string) => {
-    const lines = data.split('\n').filter(l => l.trim() !== '' && !l.includes('====='));
+  const renderTAC = (data: any) => {
+    let lines: string[] = [];
+    if (typeof data === 'string') {
+      lines = data.split('\n').filter((l: string) => l.trim() !== '' && !l.includes('====='));
+    } else if (Array.isArray(data)) {
+      lines = data.map((t: any) => {
+        if (t.op === 'IF') return `IF ${t.arg1} GOTO ${t.result}`;
+        if (t.op === 'GOTO') return `GOTO ${t.result}`;
+        if (t.op === 'LABEL') return `${t.result}:`;
+        if (t.op === '=') return `${t.result} = ${t.arg1}`;
+        return `${t.result} = ${t.arg1} ${t.op} ${t.arg2}`;
+      });
+    }
+
     return (
       <div className="code-block animated">
         {lines.map((line, idx) => {
@@ -191,17 +283,23 @@ export default function Home() {
     );
   };
 
-  const renderQuadruples = (data: string) => {
-    const lines = data.split('\n').filter(l => l.trim() !== '' && !l.includes('====='));
-    const rows = lines.map(line => {
-      const match = line.match(/^\s*\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)\s*$/);
-      if (match) {
-        return { op: match[1], arg1: match[2], arg2: match[3], res: match[4] };
-      }
-      return null;
-    }).filter(Boolean);
-
-    if (rows.length === 0) return <pre className="raw-output">{data}</pre>;
+  const renderQuadruples = (data: any) => {
+    let rows: any[] = [];
+    if (typeof data === 'string') {
+      const lines = data.split('\n').filter((l: string) => l.trim() !== '' && !l.includes('====='));
+      rows = lines.map((line: string) => {
+        const match = line.match(/^\s*\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)\s*$/);
+        if (match) {
+          return { op: match[1], arg1: match[2], arg2: match[3], result: match[4] };
+        }
+        return null;
+      }).filter(Boolean);
+      if (rows.length === 0) return <pre className="raw-output">{data}</pre>;
+    } else if (Array.isArray(data)) {
+      rows = data;
+    } else {
+      return <pre className="raw-output">{JSON.stringify(data)}</pre>;
+    }
 
     return (
       <div className="animated">
@@ -217,14 +315,94 @@ export default function Home() {
           <tbody>
             {rows.map((row, idx) => (
               <tr key={idx}>
-                <td className="code-operator">{row?.op}</td>
+                <td className="code-operator">{row?.op || row?.operator}</td>
                 <td className="code-operand">{row?.arg1}</td>
                 <td className="code-operand">{row?.arg2}</td>
-                <td className="code-temp">{row?.res}</td>
+                <td className="code-temp">{row?.result || row?.res}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+    );
+  };
+
+  const renderTriples = (data: any) => {
+    if (!Array.isArray(data)) return <pre className="raw-output">{typeof data === 'object' ? JSON.stringify(data, null, 2) : data}</pre>;
+
+    return (
+      <div className="animated">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Index</th>
+              <th>Operator</th>
+              <th>Argument 1</th>
+              <th>Argument 2</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, idx) => (
+              <tr key={idx}>
+                <td className="code-temp">({row?.index})</td>
+                <td className="code-operator">{row?.operator || row?.op}</td>
+                <td className="code-operand">{row?.arg1}</td>
+                <td className="code-operand">{row?.arg2}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderIndirectTriples = (data: any) => {
+    if (!data || !data.pointerTable || !data.triples) return <pre className="raw-output">{typeof data === 'object' ? JSON.stringify(data, null, 2) : data}</pre>;
+
+    return (
+      <div className="animated" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem', alignItems: 'start' }}>
+        <div>
+          <h4 style={{ marginBottom: '1rem', color: '#fcd34d' }}>Pointer Table</h4>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Statement</th>
+                <th>Pointer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.pointerTable.map((ptr: number, idx: number) => (
+                <tr key={idx}>
+                  <td className="code-temp">({idx})</td>
+                  <td className="code-operand">({ptr})</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h4 style={{ marginBottom: '1rem', color: '#fcd34d' }}>Triples Table</h4>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Index</th>
+                <th>Operator</th>
+                <th>Argument 1</th>
+                <th>Argument 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.triples.map((row: any, idx: number) => (
+                <tr key={idx}>
+                  <td className="code-temp">({row?.index})</td>
+                  <td className="code-operator">{row?.operator || row?.op}</td>
+                  <td className="code-operand">{row?.arg1}</td>
+                  <td className="code-operand">{row?.arg2}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
@@ -293,30 +471,47 @@ export default function Home() {
       return <div className="output-content">{renderSemantic(data)}</div>;
     }
 
-    if (activeTab === 'tac' && typeof data === 'string') {
+    if (activeTab === 'tac' && data) {
       return <div className="output-content">{renderTAC(data)}</div>;
     }
 
-    if (activeTab === 'quadruple' && typeof data === 'string') {
+    if (activeTab === 'quadruple' && data) {
       return <div className="output-content" style={{ padding: 0 }}>{renderQuadruples(data)}</div>;
     }
 
-    if (activeTab === 'target' && typeof data === 'string') {
-      return (
-        <div className="output-content">
-          <div className="code-block animated">
-            {data.split('\n').filter(l => l.trim() !== '' && !l.includes('=====')).map((line, idx) => (
-              <div key={idx} className="code-line">{line}</div>
-            ))}
+    if (activeTab === 'triples' && data) {
+      return <div className="output-content" style={{ padding: 0 }}>{renderTriples(data)}</div>;
+    }
+
+    if (activeTab === 'indirectTriples' && data) {
+      return <div className="output-content" style={{ padding: 0 }}>{renderIndirectTriples(data)}</div>;
+    }
+
+    if (activeTab === 'target' && data) {
+      let lines: string[] = [];
+      if (typeof data === 'string') {
+        lines = data.split('\n').filter((l: string) => l.trim() !== '' && !l.includes('====='));
+      } else if (Array.isArray(data)) {
+        lines = data;
+      }
+
+      if (lines.length > 0) {
+        return (
+          <div className="output-content">
+            <div className="code-block animated">
+              {lines.map((line, idx) => (
+                <div key={idx} className="code-line">{line}</div>
+              ))}
+            </div>
           </div>
-        </div>
-      );
+        );
+      }
     }
 
     if (activeTab === 'execution' && typeof data === 'string') {
       return (
-        <div className="output-content animated">
-          <pre className="raw-output" style={{ color: '#fcd34d' }}>{data}</pre>
+        <div className="output-content" style={{ padding: 0 }}>
+          {renderExecution(data)}
         </div>
       );
     }
@@ -334,49 +529,19 @@ export default function Home() {
           </div>
           <div className="report-card">
             <h3>Quadruples</h3>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Operator</th>
-                  <th>Arg 1</th>
-                  <th>Arg 2</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.quadruples || []).map((q: any, idx: number) => (
-                  <tr key={idx}>
-                    <td className="code-operator">{q.op}</td>
-                    <td className="code-operand">{q.arg1}</td>
-                    <td className="code-operand">{q.arg2}</td>
-                    <td className="code-temp">{q.result}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {renderQuadruples(data.quadruples || [])}
+          </div>
+          <div className="report-card">
+            <h3>Triples</h3>
+            {renderTriples(data.triples || [])}
+          </div>
+          <div className="report-card" style={{ gridColumn: '1 / -1' }}>
+            <h3>Indirect Triples</h3>
+            {renderIndirectTriples(data.indirectTriples || {})}
           </div>
           <div className="report-card">
             <h3>Optimized Quadruples</h3>
-             <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Operator</th>
-                  <th>Arg 1</th>
-                  <th>Arg 2</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.optimized || []).map((q: any, idx: number) => (
-                  <tr key={idx}>
-                    <td className="code-operator">{q.op}</td>
-                    <td className="code-operand">{q.arg1}</td>
-                    <td className="code-operand">{q.arg2}</td>
-                    <td className="code-temp">{q.result}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {renderQuadruples(data.optimized || [])}
           </div>
         </div>
       );
@@ -397,6 +562,8 @@ export default function Home() {
     { id: 'semantic', label: 'Semantic' },
     { id: 'tac', label: 'TAC' },
     { id: 'quadruple', label: 'Quadruple' },
+    { id: 'triples', label: 'Triples' },
+    { id: 'indirectTriples', label: 'Indirect Triples' },
     { id: 'target', label: 'Target Code' },
     { id: 'execution', label: 'Execution Trace' },
     { id: 'full', label: 'Full Report' },

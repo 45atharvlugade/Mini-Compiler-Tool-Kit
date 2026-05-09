@@ -59,10 +59,19 @@ public class Interpreter {
             }
         }
 
+        int executionCount = 0;
+        int MAX_EXECUTIONS = 10000;
+
         // =====================================
         // EXECUTION
         // =====================================
         for (int i = 0; i < code.size(); i++) {
+
+            if (executionCount++ > MAX_EXECUTIONS) {
+                output.append("\n[ERROR] Execution limit reached. Infinite loop detected!\n");
+                trace.append("\n[ERROR] Execution limit reached. Infinite loop detected!");
+                break;
+            }
 
             String instruction =
                     clean(code.get(i));

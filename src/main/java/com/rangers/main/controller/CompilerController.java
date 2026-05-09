@@ -300,12 +300,21 @@ public class CompilerController {
         List<String> target =
                 targetCodeGenerator.generate(tac);
 
+        List<Triple> triples =
+                tripleGenerator.generate(tac);
+
+        Object indirectTriples =
+                indirectTripleGenerator.generate(triples);
+
         return ResponseEntity.ok(
                 Map.of(
                         "tokens", tokens,
                         "ast", ast.printTree(""),
                         "semantic", semantic,
                         "tac", tac,
+                        "quadruples", quadruples,
+                        "triples", triples,
+                        "indirectTriples", indirectTriples,
                         "optimized", optimized,
                         "target", target
                 )
