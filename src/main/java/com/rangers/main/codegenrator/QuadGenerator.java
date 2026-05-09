@@ -11,17 +11,17 @@ import com.rangers.main.model.Quadruple;
 @Component
 public class QuadGenerator {
 
-    private List<Quadruple> code;
+    private List<Quadruple> quadList;
     private int tempCount;
 
     public List<Quadruple> generate(ASTNode root) {
 
-        code = new ArrayList<>();
+        quadList = new ArrayList<>();
         tempCount = 0;
 
         visit(root);
 
-        return code;
+        return quadList;
     }
 
     private String newTemp() {
@@ -32,25 +32,39 @@ public class QuadGenerator {
 
         if (node == null) return;
 
-        if (node.getType().equals("ASSIGN") ||
-            node.getType().equals("DECLARATION")) {
+        switch (node.getType()) {
 
-            handleAssign(node);
+            // ================= ASSIGN =================
+            case "ASSIGN":
+
+                String left = node.getChildren().get(0).getValue();
+                String right = eval(node.getChildren().get(1));
+
+                quadList.add(new Quadruple("=", right, "-", left));
+                break;
+
+            // ================= DECLARATION =================
+            case "DECLARATION":
+
+                String var = node.getChildren().get(0).getValue();
+
+                if (node.getChildren().size() > 1) {
+
+                    String val = eval(node.getChildren().get(1));
+                    quadList.add(new Quadruple("=", val, "-", var));
+
+                } else {
+
+                    quadList.add(new Quadruple("=", "0", "-", var));
+                }
+
+                break;
+
+            default:
+                for (ASTNode child : node.getChildren()) {
+                    visit(child);
+                }
         }
-
-        for (ASTNode child : node.getChildren()) {
-            visit(child);
-        }
-    }
-
-    private void handleAssign(ASTNode node) {
-
-        String left = node.getChildren().get(0).getValue();
-        ASTNode expr = node.getChildren().get(1);
-
-        String result = eval(expr);
-
-        code.add(new Quadruple("=", result, "-", left));
     }
 
     private String eval(ASTNode node) {
@@ -66,7 +80,12 @@ public class QuadGenerator {
 
             String temp = newTemp();
 
-            code.add(new Quadruple(node.getValue(), l, r, temp));
+            quadList.add(new Quadruple(
+                    node.getValue(),
+                    l,
+                    r,
+                    temp
+            ));
 
             return temp;
         }

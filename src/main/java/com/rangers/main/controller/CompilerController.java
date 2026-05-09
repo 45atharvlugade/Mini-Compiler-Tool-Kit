@@ -1,7 +1,5 @@
 package com.rangers.main.controller;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -10,13 +8,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.rangers.main.codegenrator.QuadGenerator;
 import com.rangers.main.lexer.Lexer;
 import com.rangers.main.model.ASTNode;
+import com.rangers.main.model.IndirectTripleGenerator;
 import com.rangers.main.model.Optimizer;
 import com.rangers.main.model.Quadruple;
 import com.rangers.main.model.SemanticAnalyzer;
@@ -24,12 +21,18 @@ import com.rangers.main.model.TAC;
 import com.rangers.main.model.TACGenerator;
 import com.rangers.main.model.TargetCodeGenerator;
 import com.rangers.main.model.Token;
+import com.rangers.main.model.Triple;
+import com.rangers.main.model.TripleGenerator;
 import com.rangers.main.parser.Parser;
 import com.rangers.main.service.CompilerService;
 
 @RestController
 @RequestMapping("/compiler")
 public class CompilerController {
+
+    // =====================================================
+    // DEPENDENCIES
+    // =====================================================
 
     @Autowired
     private Lexer lexer;
@@ -41,186 +44,268 @@ public class CompilerController {
     private SemanticAnalyzer semanticAnalyzer;
 
     @Autowired
-    private CompilerService compilerService;
-    
-    @Autowired
     private TACGenerator tacGenerator;
-    
-    @Autowired
-    private QuadGenerator quadGenerator;
-    
+
     @Autowired
     private Optimizer optimizer;
-    
+
     @Autowired
     private TargetCodeGenerator targetCodeGenerator;
 
-    // ================= FILE COMPILATION =================
-    @PostMapping("/compile-file")
-    public ResponseEntity<String> compileFile(@RequestBody String input) {
+    @Autowired
+    private CompilerService compilerService;
+    
+    @Autowired
+    private TripleGenerator tripleGenerator;
+    
+    @Autowired
+    private IndirectTripleGenerator indirectTripleGenerator;
+    
 
-        if (input == null || input.trim().isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body("Input Error: Empty code provided");
+
+    // =====================================================
+    // FULL COMPILATION
+    // =====================================================
+
+    @PostMapping("/compile")
+    public ResponseEntity<String> compile(
+            @RequestBody String input
+    ) {
+
+        if (input == null ||
+            input.trim().isEmpty()) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body("Compilation Error : Empty Input");
         }
 
-        String code = input.trim();
-
-        String result = compilerService.compile(code);
+        String result =
+                compilerService.compile(input);
 
         return ResponseEntity.ok(result);
     }
 
-    // ================= PHASE 1: LEXER =================
+    // =====================================================
+    // PHASE 1 : LEXICAL ANALYSIS
+    // =====================================================
+
     @PostMapping("/phase1/lexer")
-    public ResponseEntity<List<Token>> lexicalAnalysis(@RequestBody String input) {
+    public ResponseEntity<List<Token>> lexer(
+            @RequestBody String input
+    ) {
 
-        if (input == null || input.trim().isEmpty()) {
-            throw new RuntimeException("Input is empty");
-        }
+        List<Token> tokens =
+                lexer.tokenize(input);
 
-        return ResponseEntity.ok(lexer.tokenize(input));
+        return ResponseEntity.ok(tokens);
     }
+    
 
-    // ================= PHASE 2: PARSER =================
-    @PostMapping("/phase2/parser")
-    public ResponseEntity<String> syntaxAnalysis(@RequestBody String input) {
+    // =====================================================
+    // PHASE 2 : SYNTAX ANALYSIS
+    // =====================================================
+
+    @PostMapping("/phase2/parser/text")
+    public ResponseEntity<String> syntaxAnalysis(
+            @RequestBody String input
+    ) {
+
+        List<Token> tokens = lexer.tokenize(input);
+
+        ASTNode ast = parser.parse(tokens);
+
+        return ResponseEntity.ok(ast.printTree());
+    }
+    
+    @PostMapping("/phase2/parser/json")
+    public ResponseEntity<?> parseJson(@RequestBody String input) {
 
         List<Token> tokens = lexer.tokenize(input);
         ASTNode ast = parser.parse(tokens);
 
-        return ResponseEntity.ok(ast.printTree(""));
+        return ResponseEntity.ok(ast.toJson());
     }
 
-    // ================= PHASE 3: SEMANTIC =================
+    // =====================================================
+    // PHASE 3 : SEMANTIC ANALYSIS
+    // =====================================================
+
     @PostMapping("/phase3/semantic")
-    public ResponseEntity<String> semantic(@RequestBody String input) {
+    public ResponseEntity<String> semantic(
+            @RequestBody String input
+    ) {
 
-        if (input == null || input.trim().isEmpty()) {
-            throw new RuntimeException("Input code is empty");
-        }
+        List<Token> tokens =
+                lexer.tokenize(input);
 
-        List<Token> tokens = lexer.tokenize(input);
-        ASTNode ast = parser.parse(tokens);
+        ASTNode ast =
+                parser.parse(tokens);
 
-        String result = semanticAnalyzer.analyze(ast);
+        String result =
+                semanticAnalyzer.analyze(ast);
 
         return ResponseEntity.ok(result);
     }
 
-    @PostMapping("/phase4/tac")
-    public ResponseEntity<String> generateTAC(@RequestBody String input) {
+    // =====================================================
+    // PHASE 4 : TAC GENERATION
+    // =====================================================
 
-        if (input == null || input.trim().isEmpty()) {
-            throw new RuntimeException("Input code is empty");
-        }
+    @PostMapping("/phase4/ir-tables")
+    public ResponseEntity<?> generateAllIR(@RequestBody String input) {
 
-        // Phase 1
         List<Token> tokens = lexer.tokenize(input);
-
-        // Phase 2
         ASTNode ast = parser.parse(tokens);
 
-        // Phase 3 (optional)
-        semanticAnalyzer.analyze(ast);
-
-        // Phase 4
+        // TAC
         List<TAC> tac = tacGenerator.generate(ast);
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("===== PHASE 4: THREE ADDRESS CODE =====\n\n");
+        // Quadruples
+        List<Quadruple> quad = tac.stream()
+                .map(t -> new Quadruple(
+                        t.getOp(),
+                        t.getArg1(),
+                        t.getArg2(),
+                        t.getResult()
+                ))
+                .toList();
 
-        if (tac.isEmpty()) {
-            sb.append("No TAC generated\n");
-        } else {
-            for (TAC t : tac) {
-                sb.append(t).append("\n");
-            }
-        }
+        // Triples
+        List<Triple> triples = tripleGenerator.generate(tac);
 
-        return ResponseEntity.ok(sb.toString());
+        // Indirect Triples
+        Object indirect = indirectTripleGenerator.generate(triples);
+
+        // FINAL RESPONSE
+        return ResponseEntity.ok(
+                Map.of(
+                        "tac", tac,
+                        "quadruples", quad,
+                        "triples", triples,
+                        "indirectTriples", indirect
+                )
+        );
     }
-    
-    @PostMapping("/phase4/quadruple")
-    public ResponseEntity<String> generateQuad(@RequestBody String input) {
+
+    // =====================================================
+    // PHASE 5 : OPTIMIZATION
+    // =====================================================
+
+    @PostMapping("/phase5/optimization")
+    public ResponseEntity<?> optimize(@RequestBody String input) {
 
         List<Token> tokens = lexer.tokenize(input);
         ASTNode ast = parser.parse(tokens);
 
-        List<Quadruple> quad = quadGenerator.generate(ast);
+        List<TAC> tacList = tacGenerator.generate(ast);
 
-        StringBuilder sb = new StringBuilder();
+        List<Quadruple> quadruples = tacList.stream()
+                .map(t -> new Quadruple(
+                        t.getOp(),
+                        t.getArg1(),
+                        t.getArg2(),
+                        t.getResult()
+                ))
+                .toList();
 
-        sb.append("===== PHASE 4: QUADRUPLE IR =====\n\n");
+        List<Quadruple> optimized = optimizer.optimize(quadruples);
 
-        for (Quadruple q : quad) {
-            sb.append(q).append("\n");
-        }
-
-        return ResponseEntity.ok(sb.toString());
+        return ResponseEntity.ok(
+                Map.of(
+                        "originalQuadruples", quadruples,
+                        "optimizedQuadruples", optimized
+                )
+        );
     }
-    
-    @PostMapping("/compile/full")
-    public ResponseEntity<?> fullCompile(@RequestBody String input) {
 
-        List<Token> tokens = lexer.tokenize(input);
-        ASTNode ast = parser.parse(tokens);
+    // =====================================================
+    // PHASE 6 : TARGET CODE
+    // =====================================================
 
-        String semantic = semanticAnalyzer.analyze(ast);
-
-        List<TAC> tac = tacGenerator.generate(ast);
-
-        List<Quadruple> quad = quadGenerator.generate(ast);
-
-        List<Quadruple> optimized = optimizer.optimize(quad);
-
-        return ResponseEntity.ok(Map.of(
-        	    "semantic", semantic,
-        	    "tac", tac.toString(),
-        	    "quadruples", quad,
-        	    "optimized", optimized
-        	));
-    }
-    
     @PostMapping("/phase6/target")
-    public ResponseEntity<String> generateTarget(@RequestBody String input) {
+    public ResponseEntity<String> target(
+            @RequestBody String input
+    ) {
 
-        if (input == null || input.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Input code is empty");
+        List<Token> tokens =
+                lexer.tokenize(input);
+
+        ASTNode ast =
+                parser.parse(tokens);
+
+        List<TAC> tacList =
+                tacGenerator.generate(ast);
+
+        List<String> targetCode =
+                targetCodeGenerator.generate(
+                        tacList
+                );
+
+        StringBuilder sb =
+                new StringBuilder();
+
+        sb.append(
+                "===== PHASE 6 : TARGET CODE =====\n\n"
+        );
+
+        for (String line : targetCode) {
+
+            sb.append(line)
+              .append("\n");
         }
 
-        input = input.trim();
+        return ResponseEntity.ok(
+                sb.toString()
+        );
+    }
 
-        List<Token> tokens = lexer.tokenize(input);
-        ASTNode ast = parser.parse(tokens);
+    // =====================================================
+    // ALL PHASES JSON RESPONSE
+    // =====================================================
 
-        // Phase 4 → TAC
-        List<TAC> tac = tacGenerator.generate(ast);
+    @PostMapping("/all")
+    public ResponseEntity<?> all(
+            @RequestBody String input
+    ) {
 
-        // Phase 6 → Target Code
-        List<String> target = targetCodeGenerator.generate(tac);
+        List<Token> tokens =
+                lexer.tokenize(input);
 
-        StringBuilder sb = new StringBuilder();
+        ASTNode ast =
+                parser.parse(tokens);
 
-        sb.append("===== PHASE 6: TARGET CODE =====\n\n");
+        String semantic =
+                semanticAnalyzer.analyze(ast);
 
-        if (target.isEmpty()) {
-            sb.append("No Target Code Generated\n");
-        } else {
-            for (String line : target) {
+        List<TAC> tac =
+                tacGenerator.generate(ast);
 
-                sb.append(line.trim()).append("\n");
+        List<Quadruple> quadruples =
+                tac.stream()
+                   .map(t -> new Quadruple(
+                           t.getOp(),
+                           t.getArg1(),
+                           t.getArg2(),
+                           t.getResult()
+                   ))
+                   .toList();
 
-                // extra spacing after labels
-                if (line.endsWith(":")) {
-                    sb.append("\n");
-                }
-            }
-        }
+        List<Quadruple> optimized =
+                optimizer.optimize(quadruples);
 
-        return ResponseEntity
-                .ok()
-                .header("Content-Type", "text/plain")
-                .body(sb.toString());
+        List<String> target =
+                targetCodeGenerator.generate(tac);
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "tokens", tokens,
+                        "ast", ast.printTree(""),
+                        "semantic", semantic,
+                        "tac", tac,
+                        "optimized", optimized,
+                        "target", target
+                )
+        );
     }
 }

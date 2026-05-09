@@ -1,24 +1,33 @@
 package com.rangers.main.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Quadruple {
 
-    public String op;
-    public String arg1;
-    public String arg2;
-    public String result;
+    // Operation
+    private String op;
 
-    public Quadruple(String op, String arg1, String arg2, String result) {
-        this.op = op;
-        this.arg1 = arg1;
-        this.arg2 = arg2;
-        this.result = result;
-    }
+    // Operands
+    private String arg1;
+    private String arg2;
+
+    // Destination
+    private String result;
 
     @Override
     public String toString() {
-        return "(" + op + ", " + arg1 + ", " + arg2 + ", " + result + ")";
+
+        return String.format(
+                "(%s, %s, %s, %s)",
+                op,
+                arg1,
+                arg2,
+                result
+        );
     }
 }

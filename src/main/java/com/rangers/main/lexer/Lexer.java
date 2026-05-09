@@ -13,197 +13,617 @@ import com.rangers.main.model.TokenType;
 public class Lexer {
 
 	private static final Set<String> KEYWORDS = Set.of(
-	        "if", "else", "while", "int", "print", "ranger"
+
+	        // control flow
+	        "if",
+	        "else",
+	        "while",
+
+	        // datatypes
+	        "int",
+	        "string",
+	        "boolean",
+
+	        // functions / special
+	        "print",
+	        "program",
+
+	        // boolean literals
+	        "true",
+	        "false"
 	);
 	
 
-    public List<Token> tokenize(String input) {
+	public List<Token> tokenize(String input) {
 
-        List<Token> tokens = new ArrayList<>();
+	    List<Token> tokens = new ArrayList<>();
 
-        int pos = 0;
-        char currentChar = input.length() > 0 ? input.charAt(0) : '\0';
+	    int pos = 0;
 
-        while (currentChar != '\0') {
+	    char currentChar =
+	            input.length() > 0
+	            ? input.charAt(0)
+	            : '\0';
 
-            // Skip whitespace
-            if (Character.isWhitespace(currentChar)) {
-                pos++;
-                currentChar = pos < input.length() ? input.charAt(pos) : '\0';
-                continue;
-            }
+	    while (currentChar != '\0') {
 
-            // Identifier / Keyword
-            if (Character.isLetter(currentChar) || currentChar == '_') {
-                int start = pos;
-                StringBuilder sb = new StringBuilder();
+	        // =====================================
+	        // SKIP WHITESPACE
+	        // =====================================
+	        if (Character.isWhitespace(currentChar)) {
 
-                while (pos < input.length() &&
-                        (Character.isLetterOrDigit(input.charAt(pos)) || input.charAt(pos) == '_')) {
-                    sb.append(input.charAt(pos));
-                    pos++;
-                }
+	            pos++;
 
-                String word = sb.toString();
+	            currentChar =
+	                    pos < input.length()
+	                    ? input.charAt(pos)
+	                    : '\0';
 
-                TokenType type;
+	            continue;
+	        }
 
-                if (KEYWORDS.contains(word)) {
-                    type = TokenType.valueOf(word.toUpperCase());
-                } else {
-                    type = TokenType.IDENTIFIER;
-                }
+	        // =====================================
+	        // SINGLE LINE COMMENTS
+	        // =====================================
+	        if (currentChar == '/' &&
+	            pos + 1 < input.length() &&
+	            input.charAt(pos + 1) == '/') {
 
-                tokens.add(new Token(type, word, start));
+	            while (pos < input.length() &&
+	                   input.charAt(pos) != '\n') {
 
-                currentChar = pos < input.length() ? input.charAt(pos) : '\0';
-                continue;
-            }
-            
-            if (currentChar == '"') {
+	                pos++;
+	            }
 
-                int start = pos;
-                pos++; // skip opening "
+	            currentChar =
+	                    pos < input.length()
+	                    ? input.charAt(pos)
+	                    : '\0';
 
-                StringBuilder sb = new StringBuilder();
+	            continue;
+	        }
 
-                while (pos < input.length() && input.charAt(pos) != '"') {
-                    sb.append(input.charAt(pos));
-                    pos++;
-                }
+	        // =====================================
+	        // IDENTIFIER / KEYWORD
+	        // =====================================
+	        if (Character.isLetter(currentChar) ||
+	            currentChar == '_') {
 
-                if (pos >= input.length()) {
-                    throw new RuntimeException("Unterminated string at position " + start);
-                }
+	            int start = pos;
 
-                pos++; // skip closing "
+	            StringBuilder sb =
+	                    new StringBuilder();
 
-                tokens.add(new Token(TokenType.STRING, sb.toString(), start));
+	            while (
+	                    pos < input.length()
+	                    &&
+	                    (
+	                        Character.isLetterOrDigit(
+	                                input.charAt(pos)
+	                        )
+	                        ||
+	                        input.charAt(pos) == '_'
+	                    )
+	            ) {
 
-                currentChar = pos < input.length() ? input.charAt(pos) : '\0';
-                continue;
-            }
+	                sb.append(input.charAt(pos));
 
-            // Number
-            if (Character.isDigit(currentChar)) {
-                int start = pos;
-                StringBuilder sb = new StringBuilder();
+	                pos++;
+	            }
 
-                while (pos < input.length() && Character.isDigit(input.charAt(pos))) {
-                    sb.append(input.charAt(pos));
-                    pos++;
-                }
+	            String word = sb.toString();
 
-                tokens.add(new Token(TokenType.NUMBER, sb.toString(), start));
+	            TokenType type;
 
-                currentChar = pos < input.length() ? input.charAt(pos) : '\0';
-                continue;
-            }
+	            if (KEYWORDS.contains(word)) {
 
-            int start = pos;
+	                type =
+	                        TokenType.valueOf(
+	                                word.toUpperCase()
+	                        );
+	            }
+	            else {
 
-            // Operators
-            switch (currentChar) {
+	                type = TokenType.IDENTIFIER;
+	            }
 
-                case '=':
-                    if (pos + 1 < input.length() && input.charAt(pos + 1) == '=') {
-                        tokens.add(new Token(TokenType.EQ, "==", start));
-                        pos += 2;
-                    } else {
-                        tokens.add(new Token(TokenType.ASSIGN, "=", start));
-                        pos++;
-                    }
-                    break;
+	            tokens.add(
+	                    new Token(
+	                            type,
+	                            word,
+	                            start
+	                    )
+	            );
 
-                case '!':
-                    if (pos + 1 < input.length() && input.charAt(pos + 1) == '=') {
-                        tokens.add(new Token(TokenType.NEQ, "!=", start));
-                        pos += 2;
-                    } else {
-                        throw new RuntimeException("Invalid character '!' at position " + start);
-                    }
-                    break;
+	            currentChar =
+	                    pos < input.length()
+	                    ? input.charAt(pos)
+	                    : '\0';
 
-                case '+':
-                    tokens.add(new Token(TokenType.PLUS, "+", start));
-                    pos++;
-                    break;
+	            continue;
+	        }
 
-                case '-':
-                    tokens.add(new Token(TokenType.MINUS, "-", start));
-                    pos++;
-                    break;
+	        // =====================================
+	        // STRING LITERAL
+	        // =====================================
+	        if (currentChar == '"') {
 
-                case '*':
-                    tokens.add(new Token(TokenType.MUL, "*", start));
-                    pos++;
-                    break;
+	            int start = pos;
 
-                case '/':
-                    tokens.add(new Token(TokenType.DIV, "/", start));
-                    pos++;
-                    break;
+	            pos++;
 
-                case '>':
-                    if (pos + 1 < input.length() && input.charAt(pos + 1) == '=') {
-                        tokens.add(new Token(TokenType.GTE, ">=", start));
-                        pos += 2;
-                    } else {
-                        tokens.add(new Token(TokenType.GT, ">", start));
-                        pos++;
-                    }
-                    break;
+	            StringBuilder sb =
+	                    new StringBuilder();
 
-                case '<':
-                    if (pos + 1 < input.length() && input.charAt(pos + 1) == '=') {
-                        tokens.add(new Token(TokenType.LTE, "<=", start));
-                        pos += 2;
-                    } else {
-                        tokens.add(new Token(TokenType.LT, "<", start));
-                        pos++;
-                    }
-                    break;
+	            while (
+	                    pos < input.length()
+	                    &&
+	                    input.charAt(pos) != '"'
+	            ) {
 
-                case ';':
-                    tokens.add(new Token(TokenType.SEMICOLON, ";", start));
-                    pos++;
-                    break;
+	                sb.append(input.charAt(pos));
 
-                case '{':
-                    tokens.add(new Token(TokenType.LBRACE, "{", start));
-                    pos++;
-                    break;
+	                pos++;
+	            }
 
-                case '}':
-                    tokens.add(new Token(TokenType.RBRACE, "}", start));
-                    pos++;
-                    break;
+	            // unterminated string
+	            if (pos >= input.length()) {
 
-                case '(':
-                    tokens.add(new Token(TokenType.LPAREN, "(", start));
-                    pos++;
-                    break;
+	                throw new RuntimeException(
+	                        "Unterminated string at position "
+	                        + start
+	                );
+	            }
 
-                case ')':
-                    tokens.add(new Token(TokenType.RPAREN, ")", start));
-                    pos++;
-                    break;
-                    
-                    
+	            pos++;
 
-                default:
-                    throw new RuntimeException(
-                            "Lexical Error: Invalid character '" + currentChar + "' at position " + start
-                    );
-            }
+	            tokens.add(
+	                    new Token(
+	                            TokenType.STRING_LITERAL,
+	                            sb.toString(),
+	                            start
+	                    )
+	            );
 
-            currentChar = pos < input.length() ? input.charAt(pos) : '\0';
-        }
+	            currentChar =
+	                    pos < input.length()
+	                    ? input.charAt(pos)
+	                    : '\0';
 
-        tokens.add(new Token(TokenType.EOF, "", pos));
+	            continue;
+	        }
 
-        
+	        // =====================================
+	        // NUMBER
+	        // supports:
+	        // 10
+	        // 10.5
+	        // =====================================
+	        if (Character.isDigit(currentChar)) {
 
-        return tokens;
-    }
+	            int start = pos;
+
+	            StringBuilder sb =
+	                    new StringBuilder();
+
+	            boolean hasDot = false;
+
+	            while (pos < input.length()) {
+
+	                char ch = input.charAt(pos);
+
+	                if (Character.isDigit(ch)) {
+
+	                    sb.append(ch);
+	                }
+	                else if (ch == '.' && !hasDot) {
+
+	                    hasDot = true;
+
+	                    sb.append(ch);
+	                }
+	                else {
+	                    break;
+	                }
+
+	                pos++;
+	            }
+
+	            tokens.add(
+	                    new Token(
+	                            TokenType.NUMBER,
+	                            sb.toString(),
+	                            start
+	                    )
+	            );
+
+	            currentChar =
+	                    pos < input.length()
+	                    ? input.charAt(pos)
+	                    : '\0';
+
+	            continue;
+	        }
+
+	        int start = pos;
+
+	        // =====================================
+	        // OPERATORS & SYMBOLS
+	        // =====================================
+	        switch (currentChar) {
+
+	            // ================= ASSIGN / EQ
+	            case '=':
+
+	                if (
+	                        pos + 1 < input.length()
+	                        &&
+	                        input.charAt(pos + 1) == '='
+	                ) {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.EQ,
+	                                    "==",
+	                                    start
+	                            )
+	                    );
+
+	                    pos += 2;
+	                }
+	                else {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.ASSIGN,
+	                                    "=",
+	                                    start
+	                            )
+	                    );
+
+	                    pos++;
+	                }
+
+	                break;
+
+	            // ================= NOT / NEQ
+	            case '!':
+
+	                if (
+	                        pos + 1 < input.length()
+	                        &&
+	                        input.charAt(pos + 1) == '='
+	                ) {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.NEQ,
+	                                    "!=",
+	                                    start
+	                            )
+	                    );
+
+	                    pos += 2;
+	                }
+	                else {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.NOT,
+	                                    "!",
+	                                    start
+	                            )
+	                    );
+
+	                    pos++;
+	                }
+
+	                break;
+
+	            // ================= AND
+	            case '&':
+
+	                if (
+	                        pos + 1 < input.length()
+	                        &&
+	                        input.charAt(pos + 1) == '&'
+	                ) {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.AND,
+	                                    "&&",
+	                                    start
+	                            )
+	                    );
+
+	                    pos += 2;
+	                }
+	                else {
+
+	                    throw new RuntimeException(
+	                            "Invalid '&' at position "
+	                            + start
+	                    );
+	                }
+
+	                break;
+
+	            // ================= OR
+	            case '|':
+
+	                if (
+	                        pos + 1 < input.length()
+	                        &&
+	                        input.charAt(pos + 1) == '|'
+	                ) {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.OR,
+	                                    "||",
+	                                    start
+	                            )
+	                    );
+
+	                    pos += 2;
+	                }
+	                else {
+
+	                    throw new RuntimeException(
+	                            "Invalid '|' at position "
+	                            + start
+	                    );
+	                }
+
+	                break;
+
+	            // ================= PLUS
+	            case '+':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.PLUS,
+	                                "+",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= MINUS
+	            case '-':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.MINUS,
+	                                "-",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= MUL
+	            case '*':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.MUL,
+	                                "*",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= DIV
+	            case '/':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.DIV,
+	                                "/",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= GT / GTE
+	            case '>':
+
+	                if (
+	                        pos + 1 < input.length()
+	                        &&
+	                        input.charAt(pos + 1) == '='
+	                ) {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.GTE,
+	                                    ">=",
+	                                    start
+	                            )
+	                    );
+
+	                    pos += 2;
+	                }
+	                else {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.GT,
+	                                    ">",
+	                                    start
+	                            )
+	                    );
+
+	                    pos++;
+	                }
+
+	                break;
+
+	            // ================= LT / LTE
+	            case '<':
+
+	                if (
+	                        pos + 1 < input.length()
+	                        &&
+	                        input.charAt(pos + 1) == '='
+	                ) {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.LTE,
+	                                    "<=",
+	                                    start
+	                            )
+	                    );
+
+	                    pos += 2;
+	                }
+	                else {
+
+	                    tokens.add(
+	                            new Token(
+	                                    TokenType.LT,
+	                                    "<",
+	                                    start
+	                            )
+	                    );
+
+	                    pos++;
+	                }
+
+	                break;
+
+	            // ================= ;
+	            case ';':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.SEMICOLON,
+	                                ";",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= ,
+	            case ',':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.COMMA,
+	                                ",",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= {
+	            case '{':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.LBRACE,
+	                                "{",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= }
+	            case '}':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.RBRACE,
+	                                "}",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= (
+	            case '(':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.LPAREN,
+	                                "(",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= )
+	            case ')':
+
+	                tokens.add(
+	                        new Token(
+	                                TokenType.RPAREN,
+	                                ")",
+	                                start
+	                        )
+	                );
+
+	                pos++;
+
+	                break;
+
+	            // ================= INVALID CHARACTER
+	            default:
+
+	                throw new RuntimeException(
+	                        "Lexical Error: Invalid character '"
+	                        + currentChar +
+	                        "' at position " +
+	                        start
+	                );
+	        }
+
+	        currentChar =
+	                pos < input.length()
+	                ? input.charAt(pos)
+	                : '\0';
+	    }
+
+	    // =========================================
+	    // EOF TOKEN
+	    // =========================================
+	    tokens.add(
+	            new Token(
+	                    TokenType.EOF,
+	                    "",
+	                    pos
+	            )
+	    );
+
+	    return tokens;
+	}
 }

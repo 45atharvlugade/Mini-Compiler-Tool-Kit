@@ -8,159 +8,433 @@ import org.springframework.stereotype.Component;
 @Component
 public class TACGenerator {
 
+    // =========================================
+    // TAC STORAGE
+    // =========================================
     private List<TAC> code;
+
+    // =========================================
+    // TEMP & LABEL COUNTERS
+    // =========================================
     private int tempCount;
+
     private int labelCount;
 
+    // =========================================
+    // MAIN GENERATION METHOD
+    // =========================================
     public List<TAC> generate(ASTNode root) {
+
         code = new ArrayList<>();
+
         tempCount = 0;
         labelCount = 0;
+
         traverse(root);
+
         return code;
     }
 
+    // =========================================
+    // GENERATE TEMP VARIABLE
+    // =========================================
     private String newTemp() {
+
         return "t" + (++tempCount);
     }
 
+    // =========================================
+    // GENERATE LABEL
+    // =========================================
     private String newLabel() {
+
         return "L" + (++labelCount);
     }
 
+    // =========================================
+    // AST TRAVERSAL
+    // =========================================
     private void traverse(ASTNode node) {
-        if (node == null) return;
+
+        if (node == null) {
+            return;
+        }
 
         switch (node.getType()) {
 
+            // =================================
+            // ROOT NODES
+            // =================================
+            case "PROGRAM":
+            case "STATEMENTS":
+
+                for (ASTNode child : node.getChildren()) {
+                    traverse(child);
+                }
+
+                break;
+
+            // =================================
+            // DECLARATION
+            // =================================
             case "DECLARATION":
+
                 handleDeclaration(node);
+
                 break;
 
+            // =================================
+            // ASSIGNMENT
+            // =================================
             case "ASSIGN":
+
                 handleAssign(node);
+
                 break;
 
+            // =================================
+            // IF STATEMENT
+            // =================================
             case "IF":
+
                 handleIf(node);
-                return;
 
+                break;
+
+            // =================================
+            // WHILE LOOP
+            // =================================
             case "WHILE":
-                handleWhile(node);
-                return;
 
+                handleWhile(node);
+
+                break;
+
+            // =================================
+            // PRINT STATEMENT
+            // =================================
+            case "PRINT":
+
+                handlePrint(node);
+
+                break;
+
+            // =================================
+            // DEFAULT RECURSION
+            // =================================
             default:
+
                 for (ASTNode child : node.getChildren()) {
                     traverse(child);
                 }
         }
     }
 
-    // ================= DECLARATION =================
+    // =========================================
+    // HANDLE DECLARATION
+    // int a = 10;
+    // =========================================
     private void handleDeclaration(ASTNode node) {
 
-        if (node.getChildren().size() < 2) return;
+        // no initialization
+        if (node.getChildren().size() < 2) {
+            return;
+        }
 
-        String var = node.getChildren().get(0).getValue();
-        ASTNode expr = node.getChildren().get(1);
+        String variableName =
+                node.getChildren().get(0).getValue();
 
-        String right = eval(expr);
+        ASTNode expressionNode =
+                node.getChildren().get(1);
 
-        code.add(new TAC("=", right, "-", var));
+        String expressionResult =
+                evaluate(expressionNode);
+
+        // a = t1
+        code.add(
+                new TAC(
+                        "=",
+                        expressionResult,
+                        "-",
+                        variableName
+                )
+        );
     }
 
-    // ================= ASSIGN =================
+    // =========================================
+    // HANDLE ASSIGNMENT
+    // a = b + c
+    // =========================================
     private void handleAssign(ASTNode node) {
 
-        String left = node.getChildren().get(0).getValue();
-        ASTNode expr = node.getChildren().get(1);
+        String variableName =
+                node.getChildren().get(0).getValue();
 
-        String right = eval(expr);
+        ASTNode expressionNode =
+                node.getChildren().get(1);
 
-        code.add(new TAC("=", right, "-", left));
+        String expressionResult =
+                evaluate(expressionNode);
+
+        code.add(
+                new TAC(
+                        "=",
+                        expressionResult,
+                        "-",
+                        variableName
+                )
+        );
     }
 
-    // ================= IF (FIXED) =================
+    // =========================================
+    // HANDLE PRINT
+    // print(a)
+    // =========================================
+    private void handlePrint(ASTNode node) {
+
+        if (node.getChildren().isEmpty()) {
+            return;
+        }
+
+        String value =
+                evaluate(node.getChildren().get(0));
+
+        code.add(
+                new TAC(
+                        "PRINT",
+                        value,
+                        "-",
+                        "-"
+                )
+        );
+    }
+
+    // =========================================
+    // HANDLE IF
+    // =========================================
     private void handleIf(ASTNode node) {
 
-        String L1 = newLabel();
-        String L2 = newLabel();
-        String L3 = newLabel();
+        // labels
+        String trueLabel = newLabel();
 
-        ASTNode condNode = node.getChildren().get(0);
+        String falseLabel = newLabel();
 
-        String left = eval(condNode.getChildren().get(0));
-        String op = condNode.getChildren().get(1).getValue();
-        String right = eval(condNode.getChildren().get(2));
+        String endLabel = newLabel();
 
-        String temp = newTemp();
+        // =====================================
+        // CONDITION
+        // =====================================
+        ASTNode conditionNode =
+                node.getChildren().get(0);
 
-        // 🔥 CONDITION EVALUATION (IMPORTANT FIX)
-        code.add(new TAC(op, left, right, temp));
+        String conditionResult =
+                evaluate(conditionNode);
 
-        // IF temp == TRUE goto L1
-        code.add(new TAC("IF", temp, "-", L1));
-        code.add(new TAC("GOTO", "-", "-", L2));
+        // IF condition TRUE GOTO trueLabel
+        code.add(
+                new TAC(
+                        "IF",
+                        conditionResult,
+                        "-",
+                        trueLabel
+                )
+        );
 
-        code.add(new TAC("LABEL", "-", "-", L1));
+        // ELSE jump
+        code.add(
+                new TAC(
+                        "GOTO",
+                        "-",
+                        "-",
+                        falseLabel
+                )
+        );
+
+        // =====================================
+        // TRUE BLOCK
+        // =====================================
+        code.add(
+                new TAC(
+                        "LABEL",
+                        "-",
+                        "-",
+                        trueLabel
+                )
+        );
+
         traverse(node.getChildren().get(1));
 
-        code.add(new TAC("GOTO", "-", "-", L3));
+        // jump to end
+        code.add(
+                new TAC(
+                        "GOTO",
+                        "-",
+                        "-",
+                        endLabel
+                )
+        );
 
-        code.add(new TAC("LABEL", "-", "-", L2));
+        // =====================================
+        // FALSE BLOCK
+        // =====================================
+        code.add(
+                new TAC(
+                        "LABEL",
+                        "-",
+                        "-",
+                        falseLabel
+                )
+        );
 
+        // else block
         if (node.getChildren().size() > 2) {
+
             traverse(node.getChildren().get(2));
         }
 
-        code.add(new TAC("LABEL", "-", "-", L3));
+        // =====================================
+        // END LABEL
+        // =====================================
+        code.add(
+                new TAC(
+                        "LABEL",
+                        "-",
+                        "-",
+                        endLabel
+                )
+        );
     }
 
-    // ================= WHILE (FIXED) =================
+    // =========================================
+    // HANDLE WHILE LOOP
+    // =========================================
     private void handleWhile(ASTNode node) {
 
-        String start = newLabel();
-        String end = newLabel();
+        String startLabel = newLabel();
 
-        code.add(new TAC("LABEL", "-", "-", start));
+        String endLabel = newLabel();
 
-        ASTNode condNode = node.getChildren().get(0);
+        // =====================================
+        // LOOP START
+        // =====================================
+        code.add(
+                new TAC(
+                        "LABEL",
+                        "-",
+                        "-",
+                        startLabel
+                )
+        );
 
-        String left = eval(condNode.getChildren().get(0));
-        String op = condNode.getChildren().get(1).getValue();
-        String right = eval(condNode.getChildren().get(2));
+        // =====================================
+        // CONDITION
+        // =====================================
+        ASTNode conditionNode =
+                node.getChildren().get(0);
 
-        String temp = newTemp();
+        String conditionResult =
+                evaluate(conditionNode);
 
-        // 🔥 CONDITION EVALUATION
-        code.add(new TAC(op, left, right, temp));
+        // IF FALSE -> EXIT LOOP
+        code.add(
+                new TAC(
+                        "IFFALSE",
+                        conditionResult,
+                        "-",
+                        endLabel
+                )
+        );
 
-        // if FALSE → exit loop
-        code.add(new TAC("IF", temp, "-", end));
-
+        // =====================================
+        // LOOP BODY
+        // =====================================
         traverse(node.getChildren().get(1));
 
-        code.add(new TAC("GOTO", "-", "-", start));
-        code.add(new TAC("LABEL", "-", "-", end));
+        // =====================================
+        // JUMP TO START
+        // =====================================
+        code.add(
+                new TAC(
+                        "GOTO",
+                        "-",
+                        "-",
+                        startLabel
+                )
+        );
+
+        // =====================================
+        // LOOP END
+        // =====================================
+        code.add(
+                new TAC(
+                        "LABEL",
+                        "-",
+                        "-",
+                        endLabel
+                )
+        );
     }
 
-    // ================= EXPRESSION =================
-    private String eval(ASTNode node) {
+    // =========================================
+    // EXPRESSION EVALUATION
+    // =========================================
+    private String evaluate(ASTNode node) {
 
-        if (node == null) return "";
+        if (node == null) {
+            return "";
+        }
 
+        // =====================================
+        // LEAF NODE
+        // =====================================
         if (node.getChildren().isEmpty()) {
+
             return node.getValue();
         }
 
-        if (node.getChildren().size() == 2) {
+        // =====================================
+        // UNARY OPERATION
+        // =====================================
+        if (node.getChildren().size() == 1) {
 
-            String left = eval(node.getChildren().get(0));
-            String right = eval(node.getChildren().get(1));
+            String operand =
+                    evaluate(node.getChildren().get(0));
 
             String temp = newTemp();
 
-            code.add(new TAC(node.getValue(), left, right, temp));
+            code.add(
+                    new TAC(
+                            node.getValue(),
+                            operand,
+                            "-",
+                            temp
+                    )
+            );
+
+            return temp;
+        }
+
+        // =====================================
+        // BINARY OPERATION
+        // =====================================
+        if (node.getChildren().size() >= 2) {
+
+            String left =
+                    evaluate(node.getChildren().get(0));
+
+            String right =
+                    evaluate(node.getChildren().get(1));
+
+            String temp = newTemp();
+
+            code.add(
+                    new TAC(
+                            node.getValue(),
+                            left,
+                            right,
+                            temp
+                    )
+            );
 
             return temp;
         }

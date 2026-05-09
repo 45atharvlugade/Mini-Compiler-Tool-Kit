@@ -11,99 +11,161 @@ import com.rangers.main.model.TokenType;
 @Component
 public class Parser {
 
+    // =========================================
+    // TOKENS
+    // =========================================
     private List<Token> tokens;
+
     private int pos;
+
     private Token currentToken;
 
-    // ================= ENTRY =================
+    // =========================================
+    // ENTRY POINT
+    // =========================================
     public ASTNode parse(List<Token> tokens) {
 
         if (tokens == null || tokens.isEmpty()) {
-            throw new RuntimeException("Syntax Error: Empty input");
+
+            throw new RuntimeException(
+                    "Syntax Error: Empty input"
+            );
         }
 
         this.tokens = tokens;
+
         this.pos = 0;
+
         this.currentToken = tokens.get(0);
 
-        ASTNode root = parseProgram();
+        ASTNode root =
+                parseProgram();
 
         if (currentToken.getType() != TokenType.EOF) {
-            throw new RuntimeException("Syntax Error: Unexpected tokens after program end");
+
+            throw new RuntimeException(
+                    "Syntax Error: Unexpected tokens after program end"
+            );
         }
 
         return root;
     }
 
-    // ================= UTIL =================
-
+    // =========================================
+    // ADVANCE TOKEN
+    // =========================================
     private void advance() {
+
         pos++;
+
         if (pos < tokens.size()) {
-            currentToken = tokens.get(pos);
+
+            currentToken =
+                    tokens.get(pos);
         }
     }
 
+    // =========================================
+    // EAT TOKEN
+    // =========================================
     private void eat(TokenType type) {
+
         if (currentToken.getType() == type) {
+
             advance();
-        } else {
+        }
+        else {
+
             throw new RuntimeException(
-                "Syntax Error: Expected " + type +
-                " but found " + currentToken.getType() +
-                " at position " + currentToken.getPosition()
+
+                    "Syntax Error: Expected "
+                    +
+                    type
+                    +
+                    " but found "
+                    +
+                    currentToken.getType()
+                    +
+                    " at position "
+                    +
+                    currentToken.getPosition()
             );
         }
     }
 
-    // ================= STATEMENTS =================
-    
-    
+    // =========================================
+    // PROGRAM
+    // =========================================
     private ASTNode parseProgram() {
 
-        // expect "ranger"
-    	if (currentToken.getType() != TokenType.RANGER) {
-    	    throw new RuntimeException("Syntax Error: Program must start with 'ranger'");
-    	}
-    	advance();
+        // program keyword
+        if (currentToken.getType() != TokenType.PROGRAM) {
 
-        // program name (Hello, Test, etc.)
-        if (currentToken.getType() != TokenType.IDENTIFIER) {
             throw new RuntimeException(
-                "Syntax Error: Expected program name after 'ranger' but found " +
-                currentToken.getType()
+                    "Syntax Error: Program must start with 'program'"
             );
         }
 
-        String programName = currentToken.getValue();
-        ASTNode root = new ASTNode("PROGRAM", programName);
+        eat(TokenType.PROGRAM);
+
+        // program name
+        if (currentToken.getType() != TokenType.IDENTIFIER) {
+
+            throw new RuntimeException(
+                    "Syntax Error: Expected program name"
+            );
+        }
+
+        String programName =
+                currentToken.getValue();
+
+        ASTNode root =
+                new ASTNode(
+                        "PROGRAM",
+                        programName
+                );
+
         eat(TokenType.IDENTIFIER);
 
-        // opening {
+        // {
         eat(TokenType.LBRACE);
 
-        // body
-        root.addChild(parseStatementList());
+        // statements
+        root.addChild(
+                parseStatementList()
+        );
 
-        // closing }
+        // }
         eat(TokenType.RBRACE);
 
         return root;
     }
 
+    // =========================================
+    // STATEMENT LIST
+    // =========================================
     private ASTNode parseStatementList() {
 
-        ASTNode root = new ASTNode("STATEMENTS");
+        ASTNode root =
+                new ASTNode("STATEMENTS");
 
-        while (currentToken.getType() != TokenType.EOF &&
-               currentToken.getType() != TokenType.RBRACE) {
+        while (
+                currentToken.getType() != TokenType.EOF
+                &&
+                currentToken.getType() != TokenType.RBRACE
+        ) {
 
-            root.addChild(parseStatement());
+            root.addChild(
+                    parseStatement()
+            );
         }
 
         return root;
     }
 
+    // =========================================
+    // SINGLE STATEMENT
+    // =========================================
     private ASTNode parseStatement() {
 
         switch (currentToken.getType()) {
@@ -118,67 +180,137 @@ public class Parser {
                 return parseWhile();
 
             case PRINT:
-                return parsePrint();   // 🔥 ADD THIS
+                return parsePrint();
 
             case INT:
-                return parseDeclaration(); // 🔥 ADD THIS (optional)
+            case STRING:
+            case BOOLEAN:
+                return parseDeclaration();
 
             default:
+
                 throw new RuntimeException(
-                    "Syntax Error: Invalid statement near '" +
-                    currentToken.getValue() +
-                    "' at position " + currentToken.getPosition()
+
+                        "Syntax Error: Invalid statement near '"
+                        +
+                        currentToken.getValue()
+                        +
+                        "' at position "
+                        +
+                        currentToken.getPosition()
                 );
         }
     }
 
-    // ================= ASSIGNMENT =================
+    // =========================================
+    // DECLARATION
+    // int a = 10;
+    // string s = "hello";
+    // =========================================
+    private ASTNode parseDeclaration() {
 
-    private ASTNode parseAssignment() {
+        Token datatype =
+                currentToken;
 
-        ASTNode node = new ASTNode("ASSIGN");
+        advance();
 
-        // LEFT SIDE
-        node.addChild(new ASTNode("IDENTIFIER", currentToken.getValue()));
+        ASTNode node =
+                new ASTNode(
+                        "DECLARATION",
+                        datatype.getValue()
+                );
+
+        // variable
+        node.addChild(
+                new ASTNode(
+                        "IDENTIFIER",
+                        currentToken.getValue()
+                )
+        );
+
         eat(TokenType.IDENTIFIER);
 
-        eat(TokenType.ASSIGN);
+        // optional assignment
+        if (currentToken.getType() == TokenType.ASSIGN) {
 
-        // 🔥 RIGHT SIDE MUST BE FULL EXPRESSION TREE
-        ASTNode expr = parseExpression();
+            eat(TokenType.ASSIGN);
 
-        node.addChild(expr);
+            node.addChild(
+                    parseExpression()
+            );
+        }
 
         eat(TokenType.SEMICOLON);
 
         return node;
     }
-    // ================= IF =================
 
+    // =========================================
+    // ASSIGNMENT
+    // =========================================
+    private ASTNode parseAssignment() {
+
+        ASTNode node =
+                new ASTNode("ASSIGN");
+
+        // variable
+        node.addChild(
+                new ASTNode(
+                        "IDENTIFIER",
+                        currentToken.getValue()
+                )
+        );
+
+        eat(TokenType.IDENTIFIER);
+
+        eat(TokenType.ASSIGN);
+
+        // expression
+        node.addChild(
+                parseExpression()
+        );
+
+        eat(TokenType.SEMICOLON);
+
+        return node;
+    }
+
+    // =========================================
+    // IF
+    // =========================================
     private ASTNode parseIf() {
 
-        ASTNode node = new ASTNode("IF");
+        ASTNode node =
+                new ASTNode("IF");
 
         eat(TokenType.IF);
+
         eat(TokenType.LPAREN);
 
-        node.addChild(parseCondition());   // 0 → CONDITION
+        node.addChild(
+                parseCondition()
+        );
 
         eat(TokenType.RPAREN);
+
         eat(TokenType.LBRACE);
 
-        node.addChild(parseStatementList()); // 1 → IF BLOCK
+        node.addChild(
+                parseStatementList()
+        );
 
         eat(TokenType.RBRACE);
 
-        // ================= ELSE (FIXED) =================
+        // else
         if (currentToken.getType() == TokenType.ELSE) {
 
             eat(TokenType.ELSE);
+
             eat(TokenType.LBRACE);
 
-            // 🔥 DIRECTLY ADD STATEMENTS (NO ELSE NODE WRAPPER)
-            node.addChild(parseStatementList()); // 2 → ELSE BLOCK
+            node.addChild(
+                    parseStatementList()
+            );
 
             eat(TokenType.RBRACE);
         }
@@ -186,74 +318,141 @@ public class Parser {
         return node;
     }
 
-    // ================= WHILE =================
-
+    // =========================================
+    // WHILE
+    // =========================================
     private ASTNode parseWhile() {
 
-        ASTNode node = new ASTNode("WHILE");
+        ASTNode node =
+                new ASTNode("WHILE");
 
         eat(TokenType.WHILE);
+
         eat(TokenType.LPAREN);
 
-        node.addChild(parseCondition());
+        node.addChild(
+                parseCondition()
+        );
 
         eat(TokenType.RPAREN);
+
         eat(TokenType.LBRACE);
 
-        node.addChild(parseStatementList());
+        node.addChild(
+                parseStatementList()
+        );
 
         eat(TokenType.RBRACE);
 
         return node;
     }
 
-    // ================= CONDITION =================
+    // =========================================
+    // PRINT
+    // =========================================
+    private ASTNode parsePrint() {
 
+        eat(TokenType.PRINT);
+
+        eat(TokenType.LPAREN);
+
+        ASTNode node =
+                new ASTNode("PRINT");
+
+        node.addChild(
+                parseExpression()
+        );
+
+        eat(TokenType.RPAREN);
+
+        eat(TokenType.SEMICOLON);
+
+        return node;
+    }
+
+    // =========================================
+    // CONDITION
+    // a < b
+    // =========================================
     private ASTNode parseCondition() {
 
-        ASTNode node = new ASTNode("CONDITION");
+        ASTNode left =
+                parseExpression();
 
-        node.addChild(parseExpression());
+        Token op =
+                currentToken;
 
-        Token op = currentToken;
+        if (
+                op.getType() != TokenType.LT
+                &&
+                op.getType() != TokenType.GT
+                &&
+                op.getType() != TokenType.LTE
+                &&
+                op.getType() != TokenType.GTE
+                &&
+                op.getType() != TokenType.EQ
+                &&
+                op.getType() != TokenType.NEQ
+        ) {
 
-        if (op.getType() == TokenType.GT ||
-            op.getType() == TokenType.LT ||
-            op.getType() == TokenType.EQ ||
-            op.getType() == TokenType.NEQ ||
-            op.getType() == TokenType.LTE ||
-            op.getType() == TokenType.GTE) {
-
-            node.addChild(new ASTNode("OP", op.getValue()));
-            advance();
-
-        } else {
             throw new RuntimeException(
-                "Syntax Error: Expected condition operator but found '" +
-                op.getValue() + "' at position " + op.getPosition()
+
+                    "Syntax Error: Expected relational operator"
             );
         }
 
-        node.addChild(parseExpression());
+        advance();
 
-        return node;
+        ASTNode conditionNode =
+                new ASTNode(
+                        "CONDITION",
+                        op.getValue()
+                );
+
+        // LEFT
+        conditionNode.addChild(left);
+
+        // RIGHT
+        conditionNode.addChild(
+                parseExpression()
+        );
+
+        return conditionNode;
     }
 
-    // ================= EXPRESSION =================
-
+    // =========================================
+    // EXPRESSION
+    // + -
+    // =========================================
     private ASTNode parseExpression() {
 
-        ASTNode node = parseTerm();
+        ASTNode node =
+                parseTerm();
 
-        while (currentToken.getType() == TokenType.PLUS ||
-               currentToken.getType() == TokenType.MINUS) {
+        while (
 
-            Token op = currentToken;
+                currentToken.getType() == TokenType.PLUS
+                ||
+                currentToken.getType() == TokenType.MINUS
+        ) {
+
+            Token op =
+                    currentToken;
+
             advance();
 
-            ASTNode newNode = new ASTNode("EXPR", op.getValue());
+            ASTNode newNode =
+                    new ASTNode(
+                            "EXPR",
+                            op.getValue()
+                    );
+
             newNode.addChild(node);
-            newNode.addChild(parseTerm());
+
+            newNode.addChild(
+                    parseTerm()
+            );
 
             node = newNode;
         }
@@ -261,19 +460,38 @@ public class Parser {
         return node;
     }
 
+    // =========================================
+    // TERM
+    // * /
+    // =========================================
     private ASTNode parseTerm() {
 
-        ASTNode node = parseFactor();
+        ASTNode node =
+                parseFactor();
 
-        while (currentToken.getType() == TokenType.MUL ||
-               currentToken.getType() == TokenType.DIV) {
+        while (
 
-            Token op = currentToken;
+                currentToken.getType() == TokenType.MUL
+                ||
+                currentToken.getType() == TokenType.DIV
+        ) {
+
+            Token op =
+                    currentToken;
+
             advance();
 
-            ASTNode newNode = new ASTNode("TERM", op.getValue());
+            ASTNode newNode =
+                    new ASTNode(
+                            "TERM",
+                            op.getValue()
+                    );
+
             newNode.addChild(node);
-            newNode.addChild(parseFactor());
+
+            newNode.addChild(
+                    parseFactor()
+            );
 
             node = newNode;
         }
@@ -281,106 +499,91 @@ public class Parser {
         return node;
     }
 
+    // =========================================
+    // FACTOR
+    // =========================================
     private ASTNode parseFactor() {
 
-        Token token = currentToken;
+        Token token =
+                currentToken;
 
+        // ================= NUMBER
         if (token.getType() == TokenType.NUMBER) {
+
             advance();
-            return new ASTNode("NUMBER", token.getValue());
+
+            return new ASTNode(
+                    "NUMBER",
+                    token.getValue()
+            );
         }
 
+        // ================= STRING
+        if (token.getType() == TokenType.STRING_LITERAL) {
+
+            advance();
+
+            return new ASTNode(
+                    "STRING",
+                    token.getValue()
+            );
+        }
+
+        // ================= TRUE
+        if (token.getType() == TokenType.TRUE) {
+
+            advance();
+
+            return new ASTNode(
+                    "BOOLEAN",
+                    "true"
+            );
+        }
+
+        // ================= FALSE
+        if (token.getType() == TokenType.FALSE) {
+
+            advance();
+
+            return new ASTNode(
+                    "BOOLEAN",
+                    "false"
+            );
+        }
+
+        // ================= IDENTIFIER
         if (token.getType() == TokenType.IDENTIFIER) {
+
             advance();
-            return new ASTNode("IDENTIFIER", token.getValue());
-        }
-        if (token.getType() == TokenType.STRING) {
-            advance();
-            return new ASTNode("STRING", token.getValue());
+
+            return new ASTNode(
+                    "IDENTIFIER",
+                    token.getValue()
+            );
         }
 
+        // ================= (
         if (token.getType() == TokenType.LPAREN) {
-            advance();
-            ASTNode node = parseExpression();
+
+            eat(TokenType.LPAREN);
+
+            ASTNode node =
+                    parseExpression();
+
             eat(TokenType.RPAREN);
+
             return node;
         }
 
         throw new RuntimeException(
-            "Syntax Error: Invalid factor near '" +
-            token.getValue() +
-            "' at position " + token.getPosition()
+
+                "Syntax Error: Invalid factor near '"
+                +
+                token.getValue()
+                +
+                "' at position "
+                +
+                token.getPosition()
         );
     }
-    
-    // -------------------------------------
-    
-    private ASTNode parsePrint() {
-
-        eat(TokenType.PRINT);
-        eat(TokenType.LPAREN);
-
-        ASTNode node = new ASTNode("PRINT");
-
-        if (currentToken.getType() != TokenType.RPAREN) {
-            node.addChild(parseExpression());
-        } else {
-            node.addChild(new ASTNode("EMPTY"));
-        }
-
-        eat(TokenType.RPAREN);
-        eat(TokenType.SEMICOLON);
-
-        return node;
-    }
-    
-    // ----------------------------------------------
-    
-    private ASTNode parseDeclaration() {
-
-        eat(TokenType.INT);
-
-        ASTNode node = new ASTNode("DECLARATION");
-
-        node.addChild(new ASTNode("IDENTIFIER", currentToken.getValue()));
-        eat(TokenType.IDENTIFIER);
-
-        eat(TokenType.ASSIGN);
-
-        node.addChild(parseExpression());
-
-        eat(TokenType.SEMICOLON);
-
-        return node;
-    }
-    
-    private ASTNode parseExpressionOrCondition() {
-
-        ASTNode left = parseExpression();
-
-        if (currentToken.getType() == TokenType.LT ||
-            currentToken.getType() == TokenType.GT ||
-            currentToken.getType() == TokenType.EQ ||
-            currentToken.getType() == TokenType.NEQ ||
-            currentToken.getType() == TokenType.LTE ||
-            currentToken.getType() == TokenType.GTE) {
-
-            Token op = currentToken;
-            advance();
-
-            ASTNode node = new ASTNode("CONDITION");
-            node.addChild(left);
-            node.addChild(new ASTNode("OP", op.getValue()));
-            node.addChild(parseExpression());
-
-            return node;
-        }
-
-        return left;
-    }
-    
-  
-    
-    
-   
 }
